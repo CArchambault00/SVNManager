@@ -78,7 +78,7 @@ The SVN Manager application is a graphical user interface (GUI) tool designed to
 - [file_operations.py](http://_vscodecontentref_/4): Handles file operations related to patch generation.
 - [svn_operations.py](http://_vscodecontentref_/5): Manages SVN operations like locking and unlocking files.
 - [version_operation.py](http://_vscodecontentref_/6): Manages versioning for patches.
-- [BAK.app.py](http://_vscodecontentref_/7): Backup of the main application file.
+- [BAK.app.py](http://_vscodecontentref_/7): First try of the main application file.
 - [get_locked_files.sh](http://_vscodecontentref_/8): Shell script to get locked files from the SVN repository.
 
 ## Notes
