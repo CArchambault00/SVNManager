@@ -4,10 +4,11 @@ import shutil
 from svn_operations import commit_files
 from tkinter import messagebox
 from config import load_config
+import time
 
 PATCH_DIR = "D:/cyframe/jtdev/Patches/Current"
 
-def generate_patch(selected_files, patch_version):
+def generate_patch(selected_files, patch_letter, patch_version, patch_description):
     config = load_config()
     svn_path = config.get("svn_path")
     os.makedirs(PATCH_DIR, exist_ok=True)
@@ -15,8 +16,20 @@ def generate_patch(selected_files, patch_version):
     if not patch_version:
         messagebox.showerror("Error", "Patch version is required!")
         return
-    patch_version_folder = os.path.join(PATCH_DIR, patch_version)
+    patch_version_folder = os.path.join(PATCH_DIR, (patch_letter + patch_version))
     os.makedirs(patch_version_folder, exist_ok=True)
+    with open(os.path.join(patch_version_folder, "ReadMe.txt"), "w") as readme:
+        readme.write("Patch " + patch_letter + patch_version + "\n")
+        readme.write(config.get("username") + "\n")
+        readme.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+        readme.write("\n")
+        readme.write(patch_description)
+        readme.write("\n")
+        readme.write("\n")
+        readme.write("Patch Content:\n")
+        readme.write("\n")
+        for file in selected_files:
+            readme.write(file + "\n")
     with open(os.path.join(patch_version_folder, "MainSQL.sql"), "w") as main_sql:
         main_sql.write("promp &&HOST\n")
         main_sql.write("promp &&PERSON\n")

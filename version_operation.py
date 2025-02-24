@@ -34,7 +34,7 @@ def next_version(module, patch_version_entry):
     if max_version:
         revision, major,minor  = max_version
         revision += 1
-        new_version = f"v{major}.{minor}.{revision}-"
+        new_version = f"{major}.{minor}.{revision}-"
         patch_version_entry.config(state="normal")
         patch_version_entry.delete(0, tk.END)
         patch_version_entry.insert(0, new_version)

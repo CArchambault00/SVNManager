@@ -130,16 +130,34 @@ def create_button_frame(parent, files_listbox):
 
 def create_button_frame_patch(parent, files_listbox):
     ## Patch Version entry
-    patch_version_label = tk.Label(parent, text="Patch Version:")
-    patch_version_label.pack(side="top", pady=5)
+    patch_version_frame = tk.Frame(parent)
+    patch_version_frame.pack(side="top", pady=5)
 
-    patch_version_entry = tk.Entry(parent)
-    patch_version_entry.pack(side="top", pady=5)
+    patch_version_label = tk.Label(patch_version_frame, text="Patch Version:")
+    patch_version_label.pack(side="left", padx=5)
+
+    # Dropdown for patch letter
+    patch_version_letter = ttk.Combobox(patch_version_frame, values=["J", "V", "W"], width=3)
+    patch_version_letter.set("V")  # default value
+    patch_version_letter.pack(side="left", padx=5)
+
+    patch_version_entry = tk.Entry(patch_version_frame)
+    patch_version_entry.pack(side="left", padx=5)
 
     ## Next Version Button
-    tk.Button(parent, text="Next Version", command=lambda: patch_version_entry.insert(0, next_version("J", patch_version_entry))).pack(side="top", pady=5)
+    tk.Button(patch_version_frame, text="Next Version", command=lambda: patch_version_entry.insert(0, next_version(patch_version_letter.get(), patch_version_entry))).pack(side="left", padx=5)
 
-    tk.Button(parent, text="Generate Patch", command=lambda: generate_patch([files_listbox.item(item, "values")[0] for item in files_listbox.selection()], patch_version_entry.get())).pack(side="top", pady=5)
+    ## Add a section to write the patch description
+    patch_description_frame = tk.Frame(parent)
+    patch_description_frame.pack(side="top", pady=5, fill="both", expand=True)
+
+    patch_description_label = tk.Label(patch_description_frame, text="Patch Description:")
+    patch_description_label.pack(side="top", padx=5)
+
+    patch_description_entry = tk.Text(patch_description_frame, height=10, width=40)  # Changed to Text widget
+    patch_description_entry.pack(side="top", padx=5, fill="both", expand=True)
+
+    tk.Button(parent, text="Generate Patch", command=lambda: generate_patch([files_listbox.item(item, "values")[0] for item in files_listbox.selection()], patch_version_letter.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip())).pack(side="top", pady=5)
 
 def lock_selected_files(files_listbox):
     selected_files = [files_listbox.item(item, "values")[0] for item in files_listbox.selection()]
