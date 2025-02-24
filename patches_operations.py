@@ -61,7 +61,7 @@ def get_all_patches(temp_yn: bool, module: str, username: str = None):
         print(f"Error fetching patches: {e}")
         return []
     
-def refresh_patches_db(treeview, temp, module, username):
+def refresh_patches(treeview, temp, module, username):
     """
     Refresh the patches displayed in the Treeview.
     """
