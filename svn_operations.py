@@ -39,7 +39,7 @@ def _lock_unlock_files(selected_files, patch_listbox, patch_listbox_patch, lock=
         locked_files.extend(selected_files)
     else:
         locked_files = [file for file in locked_files if file not in selected_files]
-
+    
     refresh_locked_files(patch_listbox)
     refresh_locked_files(patch_listbox_patch)
 
@@ -49,7 +49,7 @@ def refresh_locked_files(files_listbox):
     files_listbox.delete(*files_listbox.get_children())
     for file in load_locked_files():
         file_name = file.split(svn_path + "\\")[1]
-        files_listbox.insert("", "end", values=(file_name, "locked"), tags=("unchecked",))
+        files_listbox.insert("", "end", values=("locked", file_name), tags=("unchecked",))
 
 def commit_files(selected_files):
     config = load_config()

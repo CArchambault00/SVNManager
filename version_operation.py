@@ -16,28 +16,31 @@ def get_max_version(module):
     else:
         nMajor, nMinor = 0, 0  # Default values if no result found
     
-    # Second query to get MAX(REVISION), MAX(MAJOR), and MAX(MINOR)
-    cursor.execute("""
+    sql = """
         SELECT NVL(MAX(REVISION), 0) AS REVISION, NVL(MAX(MAJOR), :nMajor) AS MAJOR, NVL(MAX(MINOR), :nMinor) AS MINOR 
         FROM PATCH_HEADER 
         WHERE DELETED_YN = 'N' AND TEMP_YN = 'N' 
-        AND MAJOR = :nMajor AND MINOR = :nMinor 
-        AND APPLICATION_ID ='CORE'
-    """, {'nMajor': nMajor, 'nMinor': nMinor})
+        AND MAJOR = :nMajor AND MINOR = :nMinor
+    """
+
+    if module == "V":
+        sql += "AND APPLICATION_ID = 'BT'"
+    else:
+        sql += "AND APPLICATION_ID = 'CORE'"
+
+    cursor.execute(sql, {"nMajor": nMajor, "nMinor": nMinor})
     
     result = cursor.fetchone()
     conn.close()
     return result
 
-def next_version(module, patch_version_entry):
+def next_version(module):
     max_version = get_max_version(module)
     if max_version:
-        revision, major,minor  = max_version
+        revision, major, minor = max_version
         revision += 1
         new_version = f"{major}.{minor}.{revision}-"
-        patch_version_entry.config(state="normal")
-        patch_version_entry.delete(0, tk.END)
-        patch_version_entry.insert(0, new_version)
-        patch_version_entry.config(state="normal")
+        return new_version
     else:
         messagebox.showerror("Error", "Failed to retrieve the max version")
+        return None
