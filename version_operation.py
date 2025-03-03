@@ -1,46 +1,30 @@
-import oracledb
 import tkinter as tk
 from tkinter import messagebox
 
-def get_max_version(module):
-    oracledb.init_oracle_client(lib_dir=r"D:\app\product\instantclient_12_1")
-    conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='PROD_CYFRAME')
-    cursor = conn.cursor()
-    
-    # First query to get MAJOR and MINOR
-    cursor.execute("SELECT MAJOR, MINOR FROM CURRENT_VERSION WHERE APPLICATION_ID='CORE'")
-    result = cursor.fetchone()
-    
-    if result:
-        nMajor, nMinor = result
-    else:
-        nMajor, nMinor = 0, 0  # Default values if no result found
-    
-    sql = """
-        SELECT NVL(MAX(REVISION), 0) AS REVISION, NVL(MAX(MAJOR), :nMajor) AS MAJOR, NVL(MAX(MINOR), :nMinor) AS MINOR 
-        FROM PATCH_HEADER 
-        WHERE DELETED_YN = 'N' AND TEMP_YN = 'N' 
-        AND MAJOR = :nMajor AND MINOR = :nMinor
-    """
+from db_handler import dbClass
 
-    if module == "V":
-        sql += "AND APPLICATION_ID = 'BT'"
-    else:
-        sql += "AND APPLICATION_ID = 'CORE'"
+db = dbClass()
 
-    cursor.execute(sql, {"nMajor": nMajor, "nMinor": nMinor})
-    
-    result = cursor.fetchone()
-    conn.close()
-    return result
+revision, major, minor = 0, 0, 0
 
 def next_version(module):
-    max_version = get_max_version(module)
+    global revision, major, minor
+    max_version = db.get_max_version(module)
     if max_version:
-        revision, major, minor = max_version
+        revision = max_version[0]["REVISION"]
+        major = max_version[0]["MAJOR"]
+        minor = max_version[0]["MINOR"]
         revision += 1
         new_version = f"{major}.{minor}.{revision}-"
         return new_version
     else:
         messagebox.showerror("Error", "Failed to retrieve the max version")
         return None
+    
+def determine_application_id(patch_letter):
+    if patch_letter == 'V':
+        return 'BT'
+    elif patch_letter == 'S':
+        return 'CORE_SVN'
+    else:
+        return 'CORE'

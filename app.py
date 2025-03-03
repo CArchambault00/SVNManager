@@ -70,7 +70,7 @@ def switch_to_patches_menu():
     patches_listbox = create_patches_treeview(bottom_left_frame)
     create_button_frame_patches(bottom_right_frame, patches_listbox, switch_to_modify_patch_menu)
     username = load_config().get("username")
-    refresh_patches(patches_listbox, False, "J", username)  # Populate the Treeview with patches
+    refresh_patches(patches_listbox, False, "S", username)  # Populate the Treeview with patches
 
 def switch_to_modify_patch_menu(patch_details):
     for widget in root.winfo_children():

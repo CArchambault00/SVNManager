@@ -4,11 +4,11 @@ from svn_operations import lock_files, unlock_files, refresh_locked_files
 from version_operation import next_version
 
 def lock_selected_files(files_listbox):
-    selected_files = [files_listbox.item(item, "values")[0] for item in files_listbox.selection()]
+    selected_files = [files_listbox.item(item, "values")[1] for item in files_listbox.selection()]
     lock_files(selected_files, files_listbox, files_listbox)
 
 def unlock_selected_files(files_listbox):
-    selected_files = [files_listbox.item(item, "values")[0] for item in files_listbox.selection()]
+    selected_files = [files_listbox.item(item, "values")[1] for item in files_listbox.selection()]
     unlock_files(selected_files, files_listbox, files_listbox)
 
 def insert_next_version(module, patch_version_entry):

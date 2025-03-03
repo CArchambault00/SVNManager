@@ -2,6 +2,8 @@
 import subprocess
 from config import load_config
 from shared_operations import load_locked_files
+import tkinter as tk
+from tkinter import messagebox
 
 
 TORTOISE_SVN = r"C:\Program Files\TortoiseSVN\bin\TortoiseProc.exe"
@@ -54,5 +56,28 @@ def refresh_locked_files(files_listbox):
 def commit_files(selected_files):
     config = load_config()
     username = config.get("username", "")
-    args = [TORTOISE_SVN, "/command:commit", f"/path:{'*'.join(selected_files)}", "/closeonend:1", f"/logmsg:{username}"]
-    subprocess.run(args, shell=True)
+    if selected_files:
+        args = [TORTOISE_SVN, "/command:commit", f"/path:{'*'.join(selected_files)}", "/closeonend:1", f"/logmsg:{username}"]
+        subprocess.run(args, shell=True)
+    else: 
+        messagebox.showerror("Error", "No files selected for commit!")
+
+def get_file_revision(file):
+    """Prints the revision number of each selected file in SVN."""
+    config = load_config()
+    username = config.get("username", "")
+    svn_path = config.get("svn_path", "")
+    
+    # Run the SVN log command to get the latest revision number
+    args = ["svn", "log", "-l", "1", file]
+    result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path)
+    
+    # Check if the command was successful
+    if result.returncode == 0:
+        # Extract the revision number from the output
+        log_output = result.stdout
+        revision_line = log_output.splitlines()[1]  # The second line contains the revision info
+        revision_number = revision_line.split()[0].strip('r')
+        return revision_number
+    else:
+        print(f"Failed to get revision for file: {file}")

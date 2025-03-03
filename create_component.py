@@ -75,7 +75,7 @@ def select_all_files(event, files_listbox):
 def handle_drop(event, listbox):
     files = listbox.tk.splitlist(event.data)
     for file in files:
-        listbox.insert('', 'end', values=(file, ''))
+        listbox.insert('', 'end', values=('unlocked', file))
 
 
 def create_top_frame(parent, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu):
