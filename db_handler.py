@@ -1,6 +1,8 @@
 import oracledb
 import configparser
 from typing import Optional, List, Dict, Any
+from dotenv import load_dotenv
+import config
 
 class dbClass:
     def __init__(self):
@@ -8,7 +10,8 @@ class dbClass:
         self.connect()
 
     def connect(self):
-        oracledb.init_oracle_client(lib_dir=r"D:\app\product\instantclient_12_1")
+        INSTANT_CLIENT = config.get_env_var("INSTANT_CLIENT")
+        oracledb.init_oracle_client(lib_dir=r"D:/app/product/instantclient_12_1")
         self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='PROD_CYFRAME')
 
     def close(self):

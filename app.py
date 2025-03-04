@@ -1,15 +1,13 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-from tkinterdnd2 import DND_FILES, TkinterDnD
-from config import load_config, save_config
-from shared_operations import load_locked_files
-from file_operations import generate_patch
-from svn_operations import lock_files, unlock_files, refresh_locked_files
-from version_operation import next_version
+from tkinterdnd2 import TkinterDnD
+from svn_operations import refresh_locked_files
 from patches_operations import refresh_patches
-from dialog import select_svn_folder, set_username, refresh_username
+from dialog import refresh_username
 from create_component import create_patches_treeview, create_file_listbox, create_top_frame
 from create_buttons import create_button_frame, create_button_frame_patch, create_button_frame_modify_patch, create_button_frame_patches
+import config
+import getpass
+
 
 def create_main_layout(root):
     root.grid_rowconfigure(1, weight=1)
@@ -69,7 +67,7 @@ def switch_to_patches_menu():
     # Create a Treeview to display patches
     patches_listbox = create_patches_treeview(bottom_left_frame)
     create_button_frame_patches(bottom_right_frame, patches_listbox, switch_to_modify_patch_menu)
-    username = load_config().get("username")
+    username = config.get_env_var("USERNAME")
     refresh_patches(patches_listbox, False, "S", username)  # Populate the Treeview with patches
 
 def switch_to_modify_patch_menu(patch_details):
@@ -94,5 +92,6 @@ def setup_gui():
     return root
 
 if __name__ == "__main__":
+    config.verify_env()
     root = setup_gui()
     root.mainloop()

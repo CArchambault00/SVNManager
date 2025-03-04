@@ -6,7 +6,8 @@ from buttons_function import lock_selected_files, unlock_selected_files
 from file_operations import generate_patch
 from buttons_function import insert_next_version, update_patch, modify_patch
 from patches_operations import refresh_patches
-from config import load_config, save_config
+import os
+import config
 
 def create_button_frame(parent, files_listbox):
     tk.Button(parent, text="Refresh lock files", command=lambda: refresh_locked_files(files_listbox)).pack(side="top", pady=10)
@@ -85,11 +86,11 @@ def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_
     patch_version_letter = ttk.Combobox(patch_version_frame, values=["J", "S", "V", "W"], width=3)
     patch_version_letter.set("S")  # default value
     patch_version_letter.pack(side="left", padx=5)
-
+    username = config.get_env_var("USERNAME")
     # On patch version change, refresh the patches
-    patch_version_letter.bind("<<ComboboxSelected>>", lambda event: refresh_patches(patches_listbox, False, patch_version_letter.get(), load_config().get("username")))
+    patch_version_letter.bind("<<ComboboxSelected>>", lambda event: refresh_patches(patches_listbox, False, patch_version_letter.get(), username))
 
-    tk.Button(parent, text="Refresh Patches", command=lambda: refresh_patches(patches_listbox, False, patch_version_letter.get(), load_config().get("username"))).pack(side="top", pady=5)
+    tk.Button(parent, text="Refresh Patches", command=lambda: refresh_patches(patches_listbox, False, patch_version_letter.get(), username)).pack(side="top", pady=5)
 
     # Add a button to modify the selected patch
     tk.Button(parent, text="Modify Patch", command=lambda: modify_patch([patches_listbox.item(item, "values") for item in patches_listbox.selection()], switch_to_modify_patch_menu)).pack(side="top", pady=5)

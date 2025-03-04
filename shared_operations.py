@@ -1,14 +1,11 @@
-import json
 import os
 import subprocess
-from config import load_config
-
+import config
 LOCKED_FILES_FILE = "locked_files.json"
 
 def load_locked_files():
-    config = load_config()
-    username = config.get("username")
-    svn_path = config.get("svn_path")
+    username = config.get_env_var("USERNAME")
+    svn_path = config.get_env_var("SVN_REPO_PATH")
 
     if not username or not svn_path:
         print("Error: Username or SVN path is missing from config.")

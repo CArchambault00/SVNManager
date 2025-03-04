@@ -2,25 +2,25 @@
 import os
 import shutil
 from svn_operations import commit_files, get_file_revision
-from create_patch_db import create_patch_header
 from tkinter import messagebox
-from config import load_config
 import time
 import version_operation as vo
 from db_handler import dbClass
 from utils import get_md5_checksum
-
-db = dbClass()
+import config
 
 PATCH_DIR = "D:/cyframe/jtdev/Patches/Current"
 
 def generate_patch(selected_files, patch_letter, patch_version, patch_description):
-    config = load_config()
-    svn_path = config.get("svn_path")
+    
+    db = dbClass()
+
+    svn_path = config.get_env_var("SVN_REPO_PATH")
+    username = config.get_env_var("USERNAME")
     os.makedirs(PATCH_DIR, exist_ok=True)
     commit_files(selected_files)
     tempYN = False
-    patch_id = db.create_patch_header(patch_letter, patch_version, patch_description, config.get("username"), tempYN, vo.major, vo.minor, vo.revision)
+    patch_id = db.create_patch_header(patch_letter, patch_version, patch_description, username, tempYN, vo.major, vo.minor, vo.revision)
     for file in selected_files:
         file_folder = os.path.dirname(file)
         if file.startswith("webpage"):
@@ -42,7 +42,7 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
     os.makedirs(patch_version_folder, exist_ok=True)
     with open(os.path.join(patch_version_folder, "ReadMe.txt"), "w") as readme:
         readme.write("Patch " + patch_letter + patch_version + "\n")
-        readme.write(config.get("username") + "\n")
+        readme.write(username + "\n")
         readme.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
         readme.write("\n")
         readme.write(patch_description)

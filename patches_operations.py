@@ -1,15 +1,15 @@
 # patches_operation.py
 from db_handler import dbClass
 
-db = dbClass()
-
-
 patch_info_dict = {}
 
 def refresh_patches(treeview, temp, module, username):
     """
     Refresh the patches displayed in the Treeview.
     """
+    
+    db = dbClass()
+    
     # Clear existing items
     for item in treeview.get_children():
         treeview.delete(item)

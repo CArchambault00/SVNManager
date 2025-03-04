@@ -1,2 +1,6 @@
 __pycache
 svn_config.json
+dist
+.env
+app.spec
+build
