@@ -105,16 +105,22 @@ class dbClass:
             'revision': revision
         })
         return patch_id
+    
 
-    def update_patch_header(self, patch_id: int, patch_name: str, comments: str) -> int:
+    def update_patch_header(self, patch_id: int, patch_version_letter: str, patch_version: str,comments: str) -> int:
         sql = """
         UPDATE PATCH_HEADER SET NAME = :patch_name, COMMENTS = :comments, CREATION_DATE = SYSDATE
         WHERE PATCH_ID = :patch_id
         """
-        self.execute_non_query(sql, {'patch_name': patch_name, 'comments': comments, 'patch_id': patch_id})
+        self.execute_non_query(sql, {'patch_name': patch_version_letter + patch_version, 'comments': comments, 'patch_id': patch_id})
+        # sql = "DELETE FROM PATCH_DETAIL WHERE PATCH_ID = :patch_id"
+        # self.execute_non_query(sql, {'patch_id': patch_id})
+        return patch_id
+
+    def delete_patch_detail(self, patch_id: int):
+        #delete patch detail
         sql = "DELETE FROM PATCH_DETAIL WHERE PATCH_ID = :patch_id"
         self.execute_non_query(sql, {'patch_id': patch_id})
-        return patch_id
 
     def update_comment(self, patch_id: int, comments: str):
         sql = "UPDATE PATCH_HEADER SET COMMENTS = :comments WHERE PATCH_ID = :patch_id"
