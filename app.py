@@ -5,8 +5,7 @@ from patches_operations import refresh_patches
 from dialog import refresh_username
 from create_component import create_patches_treeview, create_file_listbox, create_top_frame
 from create_buttons import create_button_frame, create_button_frame_patch, create_button_frame_modify_patch, create_button_frame_patches
-import config
-import getpass
+from config import load_config
 
 
 def create_main_layout(root):
@@ -58,6 +57,7 @@ def switch_to_patch_menu():
     refresh_username(username_entry)
 
 def switch_to_patches_menu():
+    config = load_config()
     for widget in root.winfo_children():
         widget.destroy()
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
@@ -67,7 +67,7 @@ def switch_to_patches_menu():
     # Create a Treeview to display patches
     patches_listbox = create_patches_treeview(bottom_left_frame)
     create_button_frame_patches(bottom_right_frame, patches_listbox, switch_to_modify_patch_menu)
-    username = config.get_env_var("USERNAME")
+    username = config.get("username")
     refresh_patches(patches_listbox, False, "S", username)  # Populate the Treeview with patches
 
 def switch_to_modify_patch_menu(patch_details):
@@ -92,6 +92,5 @@ def setup_gui():
     return root
 
 if __name__ == "__main__":
-    config.verify_env()
     root = setup_gui()
     root.mainloop()

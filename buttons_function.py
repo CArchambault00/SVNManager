@@ -7,7 +7,7 @@ from db_handler import dbClass
 from utils import get_md5_checksum
 import os
 from svn_operations import get_file_revision
-import config
+from config import load_config
 
 
 def lock_selected_files(files_listbox):
@@ -28,7 +28,8 @@ def insert_next_version(module, patch_version_entry):
 
 def update_patch(selected_files, patch_id, patch_version_letter, patch_version_entry, patch_description):
     db = dbClass()
-    svn_path = config.get_env_var("SVN_REPO_PATH")
+    config = load_config()
+    svn_path = config.get("svn_path")
     db.update_patch_header(patch_id, patch_version_letter, patch_version_entry, patch_description)
     db.delete_patch_detail(patch_id)
     for file in selected_files:

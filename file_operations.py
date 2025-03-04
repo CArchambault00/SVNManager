@@ -7,16 +7,16 @@ import time
 import version_operation as vo
 from db_handler import dbClass
 from utils import get_md5_checksum
-import config
+from config import load_config
 
 PATCH_DIR = "D:/cyframe/jtdev/Patches/Current"
 
 def generate_patch(selected_files, patch_letter, patch_version, patch_description):
     
     db = dbClass()
-
-    svn_path = config.get_env_var("SVN_REPO_PATH")
-    username = config.get_env_var("USERNAME")
+    config = load_config()
+    svn_path = config.get("svn_path")
+    username = config.get("username")
     os.makedirs(PATCH_DIR, exist_ok=True)
     commit_files(selected_files)
     tempYN = False

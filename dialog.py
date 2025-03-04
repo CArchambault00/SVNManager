@@ -1,23 +1,26 @@
 
 from tkinter import filedialog, messagebox, ttk
 import tkinter as tk
-import config
+from config import load_config, save_config
 
 def select_svn_folder():
     folder = filedialog.askdirectory(title="Select SVN Folder")
     if folder:
-        with open(".env", "a") as env_file:
-            env_file.write(f"SVN_PATH={folder}\n")
+        config = load_config()
+        config["svn_path"] = folder
+        save_config(config)
 
 def set_username(username_entry):
     username = username_entry.get()
     if username:
-        with open(".env", "a") as env_file:
-            env_file.write(f"USERNAME={username}\n")
+        config = load_config()
+        config["username"] = username
+        save_config(config)
+        messagebox.showinfo("Info", "Username saved!")
 
 def refresh_username(username_entry):
-    username = config.get_env_var("USERNAME")
-    print(username)
+    config = load_config()
+    username = config.get("username")
     if username:
         username_entry.insert(0, username)  # Insert the username if it exists
     else:

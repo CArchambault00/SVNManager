@@ -1,4 +1,5 @@
 import hashlib
+from tkinter import messagebox
 
 def get_md5_checksum(file_path):
     """Returns the MD5 checksum of a given file."""
@@ -10,5 +11,5 @@ def get_md5_checksum(file_path):
                 md5_hash.update(chunk)
         return md5_hash.hexdigest()
     except FileNotFoundError:
-        print(f"Error: File {file_path} not found.")
+        messagebox.showerror("Error", f"File not found: {file_path}")
         return None

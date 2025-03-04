@@ -1,8 +1,8 @@
 import oracledb
-import configparser
 from typing import Optional, List, Dict, Any
-from dotenv import load_dotenv
-import config
+import os
+from tkinter import messagebox
+import sys
 
 class dbClass:
     def __init__(self):
@@ -10,9 +10,19 @@ class dbClass:
         self.connect()
 
     def connect(self):
-        INSTANT_CLIENT = config.get_env_var("INSTANT_CLIENT")
-        oracledb.init_oracle_client(lib_dir=r"D:/app/product/instantclient_12_1")
-        self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='PROD_CYFRAME')
+        INSTANT_CLIENT = os.getenv("INSTANT_CLIENT")
+        if not INSTANT_CLIENT:
+            messagebox.showerror("Error", "Please set the environment variable INSTANT_CLIENT")
+            sys.exit(1)
+        try:
+            # Initialize Oracle client
+            oracledb.init_oracle_client(lib_dir=INSTANT_CLIENT)
+            
+            # Connect to the Oracle database
+            self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='PROD_CYFRAME')
+            print("Connected to the database successfully!")
+        except oracledb.Error as e:
+            messagebox.showerror("Database Error", f"Failed to connect to the database, Application will not work properly\n{e}")
 
     def close(self):
         if self.conn:

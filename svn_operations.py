@@ -3,7 +3,8 @@ import subprocess
 from shared_operations import load_locked_files
 import tkinter as tk
 from tkinter import messagebox
-import config
+from config import load_config
+import os
 
 TORTOISE_SVN = r"C:\Program Files\TortoiseSVN\bin\TortoiseProc.exe"
 
@@ -14,8 +15,9 @@ def unlock_files(selected_files, patch_listbox, patch_listbox_patch):
     _lock_unlock_files(selected_files, patch_listbox, patch_listbox_patch, lock=False)
 
 def _lock_unlock_files(selected_files, patch_listbox, patch_listbox_patch, lock=True):
-    username = config.get_env_var("USERNAME")
-    svn_path = config.get_env_var("SVN_REPO_PATH")
+    config = load_config()
+    username = config.get("username")
+    svn_path = config.get("svn_path")
     command = "lock" if lock else "unlock"
     
     # Ensure lock message is properly formatted
@@ -44,7 +46,8 @@ def _lock_unlock_files(selected_files, patch_listbox, patch_listbox_patch, lock=
     refresh_locked_files(patch_listbox_patch)
 
 def refresh_locked_files(files_listbox):
-    svn_path = config.get_env_var("SVN_REPO_PATH")
+    config = load_config()
+    svn_path = config.get("svn_path")
     if svn_path:
         svn_path = svn_path.replace("/", "\\")
         files_listbox.delete(*files_listbox.get_children())
@@ -53,7 +56,8 @@ def refresh_locked_files(files_listbox):
             files_listbox.insert("", "end", values=("locked", file_name), tags=("unchecked",))
 
 def commit_files(selected_files):
-    username = config.get_env_var("USERNAME")
+    config = load_config()
+    username = config.get("username")
     if selected_files:
         args = [TORTOISE_SVN, "/command:commit", f"/path:{'*'.join(selected_files)}", "/closeonend:1", f"/logmsg:{username}"]
         subprocess.run(args, shell=True)
@@ -61,8 +65,9 @@ def commit_files(selected_files):
         messagebox.showerror("Error", "No files selected for commit!")
 
 def get_file_revision(file):
+    config = load_config()
     """Prints the revision number of each selected file in SVN."""
-    svn_path = config.get_env_var("SVN_REPO_PATH")
+    svn_path = config.get("svn_path")
     
     # Run the SVN log command to get the latest revision number
     args = ["svn", "log", "-l", "1", file]
@@ -76,4 +81,4 @@ def get_file_revision(file):
         revision_number = revision_line.split()[0].strip('r')
         return revision_number
     else:
-        print(f"Failed to get revision for file: {file}")
+        messagebox.showerror("Error", "Failed to get file revision! For file: " + file)

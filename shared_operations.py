@@ -1,26 +1,29 @@
 import os
 import subprocess
-import config
+from config import load_config
+from tkinter import messagebox
+
 LOCKED_FILES_FILE = "locked_files.json"
 
 def load_locked_files():
-    username = config.get_env_var("USERNAME")
-    svn_path = config.get_env_var("SVN_REPO_PATH")
+    config = load_config()
+    username = config.get("username")
+    svn_path = config.get("svn_path")
 
     if not username or not svn_path:
-        print("Error: Username or SVN path is missing from config.")
+        messagebox.showwarning("Warning", "Please set the username and SVN path in the configuration!")
         return []
 
     if not os.path.isdir(svn_path):
-        print(f"Error: The specified SVN path '{svn_path}' does not exist.")
+        messagebox.showwarning("Warning", "Invalid SVN path!")
         return []
 
     # Run the SVN command to get the XML status output
     command = f'svn status --xml -u {svn_path}'
     result = subprocess.run(command, shell=True, capture_output=True, text=True)
-
+   
     if result.returncode != 0:
-        print(f"Error executing SVN command: {result.stderr}")
+        messagebox.showerror("Error", "Failed to get SVN status!")
         return []
 
     locked_files = []
