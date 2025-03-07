@@ -3,7 +3,7 @@ from tkinter import ttk
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from svn_operations import lock_files, unlock_files, refresh_locked_files
 from buttons_function import lock_selected_files, unlock_selected_files
-from file_operations import generate_patch
+from patch_generation import generate_patch
 from buttons_function import insert_next_version, update_patch, modify_patch
 from patches_operations import refresh_patches
 from config import load_config

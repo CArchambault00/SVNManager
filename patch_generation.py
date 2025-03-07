@@ -1,4 +1,3 @@
-# file_operations.py
 import os
 import shutil
 from svn_operations import commit_files, get_file_revision

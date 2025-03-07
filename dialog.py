@@ -28,12 +28,3 @@ def set_username(username_entry):
         save_config(config)
         username_entry.config(highlightthickness=0)
         messagebox.showinfo("Info", "Username saved!")
-
-
-def refresh_username(username_entry):
-    config = load_config()
-    username = config.get("username")
-    if username:
-        username_entry.insert(0, username)  # Insert the username if it exists
-    else:
-        messagebox.showwarning("Warning", "Please set the username!")  # Show a warning if the username is not set

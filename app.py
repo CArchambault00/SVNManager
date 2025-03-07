@@ -3,7 +3,6 @@ from tkinter import messagebox
 from tkinterdnd2 import TkinterDnD
 from svn_operations import refresh_locked_files
 from patches_operations import refresh_patches
-from dialog import refresh_username
 from create_component import create_patches_treeview, create_file_listbox, create_top_frame
 from create_buttons import create_button_frame, create_button_frame_patch, create_button_frame_modify_patch, create_button_frame_patches
 from config import load_config, get_unset_var

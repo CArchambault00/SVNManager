@@ -4,7 +4,7 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 from dialog import select_svn_folder, set_username, select_instant_client_folder
 from config import load_config
 from patches_operations import get_selected_patch
-
+from buttons_function import select_all_files, deselect_all_files, handle_drop
 def create_patches_treeview(parent):
     """
     Create a Treeview widget to display patches.
@@ -64,21 +64,6 @@ def create_file_listbox(parent):
     listbox.dnd_bind('<<Drop>>', lambda event: handle_drop(event, listbox))
 
     return listbox
-
-def deselect_all_files(event, files_listbox):
-    if not files_listbox.identify_row(event.y):  # Check if click is on an empty area
-        files_listbox.selection_remove(files_listbox.selection())
-
-
-def select_all_files(event, files_listbox):
-    for item in files_listbox.get_children():
-        files_listbox.selection_add(item)
-
-def handle_drop(event, listbox):
-    files = listbox.tk.splitlist(event.data)
-    for file in files:
-        listbox.insert('', 'end', values=('unlocked', file))
-
 
 def create_top_frame(parent, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, selected_menu):
     config = load_config()
