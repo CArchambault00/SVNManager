@@ -10,10 +10,6 @@ def load_locked_files():
     username = config.get("username")
     svn_path = config.get("svn_path")
 
-    if not username or not svn_path:
-        messagebox.showwarning("Warning", "Please set the username and SVN path in the configuration!")
-        return []
-
     if not os.path.isdir(svn_path):
         messagebox.showwarning("Warning", "Invalid SVN path!")
         return []

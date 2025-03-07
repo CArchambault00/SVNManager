@@ -1,7 +1,8 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinterdnd2 import DND_FILES, TkinterDnD
-from dialog import select_svn_folder, set_username
+from dialog import select_svn_folder, set_username, select_instant_client_folder
+from config import load_config
 
 def create_patches_treeview(parent):
     """
@@ -79,18 +80,42 @@ def handle_drop(event, listbox):
 
 
 def create_top_frame(parent, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu):
-    tk.Label(parent, text="Username:").pack(side="left", padx=5, pady=5)
-    entry = tk.Entry(parent)
-    entry.config(state=tk.NORMAL)
-    entry.pack(side="left", padx=5, pady=5)
-    tk.Button(parent, text="Save", command=lambda: set_username(entry)).pack(side="left", padx=5, pady=5)
-    tk.Button(parent, text="Select SVN Folder", command=select_svn_folder).pack(side="right", padx=5, pady=5)
+    config = load_config()
+    username = config.get("username")
+    instant_client = config.get("instant_client")
+    svn_path = config.get("svn_path")
+    col1_frame = tk.Frame(parent)
+    col1_frame.pack(side="left", fill="y", padx=5,)
     
-    button_frame = tk.Frame(parent)
-    button_frame.pack(fill="x", pady=5)
-    tk.Button(button_frame, text="Lock/Unlock Menu", command=switch_to_lock_unlock_menu).pack(side="left", padx=5, pady=5)
-    tk.Button(button_frame, text="Patch Menu", command=switch_to_patch_menu).pack(side="left", padx=5, pady=5)
-    tk.Button(button_frame, text="Patches Menu", command=switch_to_patches_menu).pack(side="left", padx=5, pady=5)
-    tk.Button(button_frame, text="Modify Patch", command=switch_to_patches_menu).pack(side="left", padx=5, pady=5)
+    username_frame = tk.Frame(col1_frame)
+    username_frame.pack(fill="x",)
+    tk.Label(username_frame, text="Username:").pack(side="left", padx=5,)
+    entry = tk.Entry(username_frame)
+    entry.config(state=tk.NORMAL)
+    if username:
+        entry.insert(0, username)
+    else:
+        entry.config(highlightbackground="red", highlightcolor="red", highlightthickness=2)
+    entry.pack(side="left", padx=5,)
+    tk.Button(username_frame, text="Save", command=lambda: set_username(entry)).pack(side='left', padx=5,)
+
+    menu_button_frame = tk.Frame(col1_frame)
+    menu_button_frame.pack(fill="x", pady=5)
+    tk.Button(menu_button_frame, text="Lock/Unlock Menu", command=switch_to_lock_unlock_menu).pack(side="left", padx=5, pady=5)
+    tk.Button(menu_button_frame, text="Patch Menu", command=switch_to_patch_menu).pack(side="left", padx=5, pady=5)
+    tk.Button(menu_button_frame, text="Patches Menu", command=switch_to_patches_menu).pack(side="left", padx=5, pady=5)
+    tk.Button(menu_button_frame, text="Modify Patch", command=switch_to_patches_menu).pack(side="left", padx=5, pady=5)
+
+    # Create a frame for the buttons and arrange them in a column
+    col2_frame = tk.Frame(parent)
+    col2_frame.pack(side="right", padx=5, pady=5)
+    instant_client_button = tk.Button(col2_frame, text="Set INSTANT_CLIENT", command=lambda: select_instant_client_folder(instant_client_button))
+    instant_client_button.pack(fill="x", pady=2)
+    svn_path_button = tk.Button(col2_frame, text="Set SVN Folder", command=lambda: select_svn_folder(svn_path_button))
+    svn_path_button.pack(fill="x", pady=2)
+    if not svn_path:
+        svn_path_button.config(background="red")
+    if not instant_client:
+        instant_client_button.config(background="red")
     
     return entry

@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Any
 import os
 from tkinter import messagebox
 import sys
+from config import load_config
 
 class dbClass:
     def __init__(self):
@@ -10,10 +11,8 @@ class dbClass:
         self.connect()
 
     def connect(self):
-        INSTANT_CLIENT = os.getenv("INSTANT_CLIENT")
-        if not INSTANT_CLIENT:
-            messagebox.showerror("Error", "Please set the environment variable INSTANT_CLIENT")
-            sys.exit(1)
+        config = load_config()
+        INSTANT_CLIENT = config.get("instant_client", "")
         try:
             # Initialize Oracle client
             oracledb.init_oracle_client(lib_dir=INSTANT_CLIENT)
@@ -22,7 +21,13 @@ class dbClass:
             self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='PROD_CYFRAME')
             print("Connected to the database successfully!")
         except oracledb.Error as e:
-            messagebox.showerror("Database Error", f"Failed to connect to the database, Application will not work properly\n{e}")
+            if INSTANT_CLIENT:
+                if ("DPI-1047" in str(e)):
+                    messagebox.showerror("Database Error", f"The selected Instant Client directory is invalid, Application will not work properly")
+                else:
+                    messagebox.showerror("Database Error", f"Failed to connect to the database, Application will not work properly\n{e}")
+            else:
+                messagebox.showerror("CONFIGURATION ERROR", f"Failed to connect to the database, Application will not work properly\nWITH THE PROPER BUTTON, YOU MUST SELECT THE INSTANT CLIENT DIRECTORY!!!\n{e}")
 
     def close(self):
         if self.conn:

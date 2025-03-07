@@ -1,11 +1,12 @@
 import tkinter as tk
+from tkinter import messagebox
 from tkinterdnd2 import TkinterDnD
 from svn_operations import refresh_locked_files
 from patches_operations import refresh_patches
 from dialog import refresh_username
 from create_component import create_patches_treeview, create_file_listbox, create_top_frame
 from create_buttons import create_button_frame, create_button_frame_patch, create_button_frame_modify_patch, create_button_frame_patches
-from config import load_config
+from config import load_config, get_unset_var
 
 
 def create_main_layout(root):
@@ -44,7 +45,9 @@ def switch_to_lock_unlock_menu():
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame(bottom_right_frame, files_listbox)
     refresh_locked_files(files_listbox)
-    refresh_username(username_entry)
+    neededVar = get_unset_var()
+    if neededVar:
+        messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
 
 def switch_to_patch_menu():
     for widget in root.winfo_children():
@@ -54,7 +57,9 @@ def switch_to_patch_menu():
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame_patch(bottom_right_frame, files_listbox)
     refresh_locked_files(files_listbox)
-    refresh_username(username_entry)
+    neededVar = get_unset_var()
+    if neededVar:
+        messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
 
 def switch_to_patches_menu():
     config = load_config()
@@ -62,13 +67,16 @@ def switch_to_patches_menu():
         widget.destroy()
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
     username_entry = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu)
-    refresh_username(username_entry)
     
     # Create a Treeview to display patches
     patches_listbox = create_patches_treeview(bottom_left_frame)
     create_button_frame_patches(bottom_right_frame, patches_listbox, switch_to_modify_patch_menu)
     username = config.get("username")
     refresh_patches(patches_listbox, False, "S", username)  # Populate the Treeview with patches
+
+    neededVar = get_unset_var()
+    if neededVar:
+        messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
 
 def switch_to_modify_patch_menu(patch_details):
     for widget in root.winfo_children():
@@ -78,8 +86,10 @@ def switch_to_modify_patch_menu(patch_details):
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame_modify_patch(bottom_right_frame, files_listbox, patch_details)
     refresh_locked_files(files_listbox)
-    refresh_username(username_entry)
 
+    neededVar = get_unset_var()
+    if neededVar:
+        messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
 
 def setup_gui():
     global root
