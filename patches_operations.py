@@ -3,6 +3,8 @@ from db_handler import dbClass
 
 patch_info_dict = {}
 
+selected_patch = None
+
 def refresh_patches(treeview, temp, module, username):
     """
     Refresh the patches displayed in the Treeview.
@@ -37,3 +39,11 @@ def get_full_patch_info(patch_name):
     Retrieve the full patch information from the dictionary.
     """
     return patch_info_dict.get(patch_name, None)
+
+
+def set_selected_patch(patch):
+    global selected_patch
+    selected_patch = patch
+
+def get_selected_patch():
+    return selected_patch

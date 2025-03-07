@@ -3,12 +3,13 @@ from tkinter import ttk
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from dialog import select_svn_folder, set_username, select_instant_client_folder
 from config import load_config
+from patches_operations import get_selected_patch
 
 def create_patches_treeview(parent):
     """
     Create a Treeview widget to display patches.
     """
-    treeview = ttk.Treeview(parent, columns=("Patch Version", "Comments", "Size", "Username", "Date"), show="headings")
+    treeview = ttk.Treeview(parent, columns=("Patch Version", "Comments", "Size", "Username", "Date"), show="headings", selectmode="browse")
     treeview.heading("Patch Version", text="Patch Version")
     treeview.heading("Comments", text="Comments")
     treeview.heading("Size", text="Size")
@@ -16,11 +17,11 @@ def create_patches_treeview(parent):
     treeview.heading("Date", text="Date")
     
     # Set column widths
-    treeview.column("Patch Version", width=75)
-    treeview.column("Comments", width=250)
-    treeview.column("Size", width=50)
-    treeview.column("Username", width=50)
-    treeview.column("Username", width=50)
+    treeview.column("Patch Version", width=100, stretch=tk.NO)
+    treeview.column("Comments", width=250, stretch=tk.NO)
+    treeview.column("Size", width=50, stretch=tk.NO)
+    treeview.column("Username", width=100, stretch=tk.NO)
+    treeview.column("Date", width=210, stretch=tk.NO)
     
     # Add scrollbars
     v_scrollbar = tk.Scrollbar(parent, orient="vertical", command=treeview.yview)
@@ -79,11 +80,14 @@ def handle_drop(event, listbox):
         listbox.insert('', 'end', values=('unlocked', file))
 
 
-def create_top_frame(parent, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu):
+def create_top_frame(parent, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, selected_menu):
     config = load_config()
     username = config.get("username")
     instant_client = config.get("instant_client")
     svn_path = config.get("svn_path")
+
+    selected_patch = get_selected_patch()
+
     col1_frame = tk.Frame(parent)
     col1_frame.pack(side="left", fill="y", padx=5,)
     
@@ -101,10 +105,26 @@ def create_top_frame(parent, switch_to_lock_unlock_menu, switch_to_patch_menu, s
 
     menu_button_frame = tk.Frame(col1_frame)
     menu_button_frame.pack(fill="x", pady=5)
-    tk.Button(menu_button_frame, text="Lock/Unlock Menu", command=switch_to_lock_unlock_menu).pack(side="left", padx=5, pady=5)
-    tk.Button(menu_button_frame, text="Patch Menu", command=switch_to_patch_menu).pack(side="left", padx=5, pady=5)
-    tk.Button(menu_button_frame, text="Patches Menu", command=switch_to_patches_menu).pack(side="left", padx=5, pady=5)
-    tk.Button(menu_button_frame, text="Modify Patch", command=switch_to_patches_menu).pack(side="left", padx=5, pady=5)
+    if selected_menu == "lock_unlock":
+        tk.Button(menu_button_frame, text="Lock/Unlock Menu", command=switch_to_lock_unlock_menu, background="grey").pack(side="left", padx=5, pady=5)
+    else:
+        tk.Button(menu_button_frame, text="Lock/Unlock Menu", command=switch_to_lock_unlock_menu).pack(side="left", padx=5, pady=5)
+    if selected_menu == "patch":
+        tk.Button(menu_button_frame, text="Patch Menu", command=switch_to_patch_menu, background="grey").pack(side="left", padx=5, pady=5)
+    else:
+        tk.Button(menu_button_frame, text="Patch Menu", command=switch_to_patch_menu).pack(side="left", padx=5, pady=5)
+    if selected_menu == "patches":
+        tk.Button(menu_button_frame, text="Patches Menu", command=switch_to_patches_menu, background="grey").pack(side="left", padx=5, pady=5)
+    else:
+        tk.Button(menu_button_frame, text="Patches Menu", command=switch_to_patches_menu).pack(side="left", padx=5, pady=5)
+    if selected_menu == "modify_patch" and selected_patch != None:
+        tk.Button(menu_button_frame, text="Modify Patch", command=lambda:switch_to_modify_patch_menu(selected_patch),  background="grey").pack(side="left", padx=5, pady=5)
+    else:
+        if selected_patch != None:
+            tk.Button(menu_button_frame, text="Modify Patch", command=lambda:switch_to_modify_patch_menu(selected_patch)).pack(side="left", padx=5, pady=5)
+        else:
+            tk.Button(menu_button_frame, text="Modify Patch", command=switch_to_patches_menu).pack(side="left", padx=5, pady=5)
+   
 
     # Create a frame for the buttons and arrange them in a column
     col2_frame = tk.Frame(parent)
@@ -118,4 +138,4 @@ def create_top_frame(parent, switch_to_lock_unlock_menu, switch_to_patch_menu, s
     if not instant_client:
         instant_client_button.config(background="red")
     
-    return entry
+    return entry,instant_client_button,svn_path_button

@@ -41,7 +41,7 @@ def switch_to_lock_unlock_menu():
     for widget in root.winfo_children():
         widget.destroy()
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
-    username_entry = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu)
+    username_entry,instant_client_button,svn_path_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "lock_unlock")
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame(bottom_right_frame, files_listbox)
     refresh_locked_files(files_listbox)
@@ -53,7 +53,7 @@ def switch_to_patch_menu():
     for widget in root.winfo_children():
         widget.destroy()
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
-    username_entry = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu)
+    username_entry,instant_client_button,svn_path_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "patch")
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame_patch(bottom_right_frame, files_listbox)
     refresh_locked_files(files_listbox)
@@ -66,7 +66,7 @@ def switch_to_patches_menu():
     for widget in root.winfo_children():
         widget.destroy()
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
-    username_entry = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu)
+    username_entry,instant_client_button,svn_path_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu,  "patches")
     
     # Create a Treeview to display patches
     patches_listbox = create_patches_treeview(bottom_left_frame)
@@ -82,7 +82,7 @@ def switch_to_modify_patch_menu(patch_details):
     for widget in root.winfo_children():
         widget.destroy()
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
-    username_entry = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu)
+    username_entry,instant_client_button,svn_path_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "modify_patch")
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame_modify_patch(bottom_right_frame, files_listbox, patch_details)
     refresh_locked_files(files_listbox)

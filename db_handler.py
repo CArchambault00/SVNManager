@@ -19,7 +19,6 @@ class dbClass:
             
             # Connect to the Oracle database
             self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='PROD_CYFRAME')
-            print("Connected to the database successfully!")
         except oracledb.Error as e:
             if INSTANT_CLIENT:
                 if ("DPI-1047" in str(e)):

@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from svn_operations import lock_files, unlock_files, refresh_locked_files
 from version_operation import next_version
-from patches_operations import get_full_patch_info
+from patches_operations import get_full_patch_info, set_selected_patch
 from db_handler import dbClass
 from utils import get_md5_checksum
 import os
@@ -50,4 +50,5 @@ def modify_patch(selected_patch, switch_to_modify_patch_menu):
     if selected_patch:
         patch_details = selected_patch[0]  # Assuming selected_patch is a list of selected items
         full_patch_info = get_full_patch_info(patch_details[0])
+        set_selected_patch(full_patch_info)
         switch_to_modify_patch_menu(full_patch_info)
