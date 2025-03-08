@@ -37,8 +37,31 @@ def select_all_files(event, files_listbox):
 
 def handle_drop(event, listbox):
     files = listbox.tk.splitlist(event.data)
+    config = load_config()
+    svn_path = config.get("svn_path")
+    files_outside_svn = []
     for file in files:
-        listbox.insert('', 'end', values=('unlocked', file))
+        print(file)
+        if os.path.isfile(file):
+            if file.startswith(svn_path):
+                file = file.replace("\\", "/")
+                file = file.replace(svn_path + "/", "")
+                listbox.insert('', 'end', values=('unlocked', file))
+            else:
+                files_outside_svn.append(file)
+        if os.path.isdir(file):
+            for root, dirs, files in os.walk(file):
+                for file in files:
+                    file = os.path.join(root, file)
+                    if file.startswith(svn_path):
+                        file = file.replace("\\", "/")
+                        file = file.replace(svn_path + "/", "")
+                        listbox.insert('', 'end', values=('unlocked', file))
+                    else:
+                        files_outside_svn.append(file)
+    if files_outside_svn:
+        tk.messagebox.showerror("Error", "The following files are not in the SVN repository and will not be added to the patch: \n" + "\n".join(files_outside_svn))
+        
 
 def update_patch(selected_files, patch_id, patch_version_letter, patch_version_entry, patch_description):
     db = dbClass()
