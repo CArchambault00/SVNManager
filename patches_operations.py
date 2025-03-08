@@ -60,8 +60,6 @@ def build_patch(patch_info):
     db = dbClass()
     
     patch_id = patch_info["PATCH_ID"]
-    print(patch_info) 
-    print(patch_id)
     
     os.makedirs(PATCH_DIR, exist_ok=True)
     files = db.get_patch_file_list(patch_id)

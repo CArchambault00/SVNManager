@@ -210,17 +210,17 @@ class dbClass:
 
     def get_max_version(self, module: str):
         module_id = self.get_module_id(module)
-        sql = "SELECT MAJOR, MINOR FROM CURRENT_VERSION WHERE APPLICATION_ID = :application_id"
-        result = self.execute_query(sql, {'application_id': module_id})
+        sql = f"SELECT MAJOR, MINOR FROM CURRENT_VERSION WHERE APPLICATION_ID = '{module_id}'"
+        result = self.execute_query(sql)
         major, minor = (result[0]['MAJOR'], result[0]['MINOR']) if result else (1, 0)
-        sql = """
+        sql = f"""
         SELECT NVL(MAX(REVISION), 0) AS REVISION, NVL(MAX(MAJOR), :major) AS MAJOR, NVL(MAX(MINOR), :minor) AS MINOR
         FROM PATCH_HEADER
         WHERE DELETED_YN = 'N' AND TEMP_YN = 'N'
         AND MAJOR = :major AND MINOR = :minor
-        AND APPLICATION_ID = :application_id
+        AND APPLICATION_ID = '{module_id}'
         """
-        return self.execute_query(sql, {'major': major, 'minor': minor, 'application_id': module_id})
+        return self.execute_query(sql, {'major': major, 'minor': minor})
 
     def get_build_list(self, patch_id: int):
         sql = """

@@ -92,15 +92,15 @@ def refresh_locked_files(files_listbox):
 def commit_files(selected_files):
     config = load_config()
     username = config.get("username")
+    svn_path = config.get("svn_path")
     if selected_files:
         args = [TORTOISE_SVN, "/command:commit", f"/path:{'*'.join(selected_files)}", "/closeonend:1", f"/logmsg:{username}"]
-        subprocess.run(args, shell=True)
+        subprocess.run(args, shell=True, cwd=svn_path)
     else: 
         messagebox.showerror("Error", "No files selected for commit!")
 
 def get_file_revision(file):
     config = load_config()
-    """Prints the revision number of each selected file in SVN."""
     svn_path = config.get("svn_path")
     
     # Run the SVN log command to get the latest revision number
@@ -124,7 +124,6 @@ def get_file_specific_version(file_path, file_folderStruture,file_name,  revisio
     if not os.path.isdir(destination_folder):
         os.makedirs(destination_folder, exist_ok=True)
 
-    print(destination_folder)
     args = ["svn", "export", f"-r{revision}", file_path, destination_folder]
     result = subprocess.run(args, capture_output=True, text=True, cwd=config.get("svn_path"))
     
