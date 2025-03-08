@@ -16,27 +16,20 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
     config = load_config()
     svn_path = config.get("svn_path")
     username = config.get("username")
+    if not patch_version:
+        messagebox.showerror("Error", "Patch version is required!")
+        return
     os.makedirs(PATCH_DIR, exist_ok=True)
     commit_files(selected_files)
     tempYN = False
     patch_id = db.create_patch_header(patch_letter, patch_version, patch_description, username, tempYN, vo.major, vo.minor, vo.revision)
     for file in selected_files:
-        file_folder = os.path.dirname(file)
-        if file.startswith("webpage"):
-            file_fullname = file.replace("webpage\\", "")
-            file_folder = file_folder.replace("webpage\\", "")
-        elif file.startswith("Database"):
-            file_fullname = file.replace("Database\\", "")
-            file_folder = file_folder.replace("Database\\", "")
-        file_fullname = file_fullname.upper()
-        file_id = db.create_patch_detail(patch_id, file_folder, file_fullname, get_file_revision(file))
+        filename = os.path.basename(file)
+        file_id = db.create_patch_detail(patch_id, file, filename, get_file_revision(file))
         
         md5checksum = get_md5_checksum(svn_path + "/" + file)
         db.set_md5(patch_id, file_id, md5checksum)
-        
-    if not patch_version:
-        messagebox.showerror("Error", "Patch version is required!")
-        return
+    
     patch_version_folder = os.path.join(PATCH_DIR, (patch_letter + patch_version))
     os.makedirs(patch_version_folder, exist_ok=True)
     with open(os.path.join(patch_version_folder, "ReadMe.txt"), "w") as readme:

@@ -4,7 +4,7 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 from svn_operations import lock_files, unlock_files, refresh_locked_files
 from buttons_function import lock_selected_files, unlock_selected_files
 from patch_generation import generate_patch
-from buttons_function import insert_next_version, update_patch, modify_patch
+from buttons_function import insert_next_version, update_patch, modify_patch, build_existing_patch
 from patches_operations import refresh_patches
 from config import load_config
 
@@ -94,3 +94,6 @@ def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_
 
     # Add a button to modify the selected patch
     tk.Button(parent, text="Modify Patch", command=lambda: modify_patch([patches_listbox.item(item, "values") for item in patches_listbox.selection()], switch_to_modify_patch_menu)).pack(side="top", pady=5)
+
+    # Generate patch
+    tk.Button(parent, text="Build Patch", command=lambda: build_existing_patch([patches_listbox.item(item, "values") for item in patches_listbox.selection()])).pack(side="top", pady=5)

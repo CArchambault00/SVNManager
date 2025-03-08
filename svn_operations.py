@@ -116,3 +116,17 @@ def get_file_revision(file):
         return revision_number
     else:
         messagebox.showerror("Error", "Failed to get file revision! For file: " + file)
+
+def get_file_specific_version(file_path, file_folderStruture,file_name,  revision, destination):
+    config = load_config()
+    destination_folder = file_folderStruture.replace(file_name, "")
+    destination_folder = destination + destination_folder
+    if not os.path.isdir(destination_folder):
+        os.makedirs(destination_folder, exist_ok=True)
+
+    print(destination_folder)
+    args = ["svn", "export", f"-r{revision}", file_path, destination_folder]
+    result = subprocess.run(args, capture_output=True, text=True, cwd=config.get("svn_path"))
+    
+    
+    
