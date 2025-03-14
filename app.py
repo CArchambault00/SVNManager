@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinterdnd2 import TkinterDnD
 from svn_operations import refresh_locked_files
-from patches_operations import refresh_patches
+from patches_operations import refresh_patches, refresh_patch_files
 from create_component import create_patches_treeview, create_file_listbox, create_top_frame
 from create_buttons import create_button_frame, create_button_frame_patch, create_button_frame_modify_patch, create_button_frame_patches
 from config import load_config, get_unset_var
@@ -84,7 +84,7 @@ def switch_to_modify_patch_menu(patch_details):
     username_entry,instant_client_button,svn_path_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "modify_patch")
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame_modify_patch(bottom_right_frame, files_listbox, patch_details)
-    refresh_locked_files(files_listbox)
+    refresh_patch_files(files_listbox, patch_details)
 
     neededVar = get_unset_var()
     if neededVar:
@@ -93,6 +93,7 @@ def switch_to_modify_patch_menu(patch_details):
 def setup_gui():
     global root
     root = TkinterDnD.Tk()
+    root.iconbitmap("SVNManagericon.ico")
     root.title("SVN Manager")
     root.geometry("900x600")
     

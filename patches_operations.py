@@ -99,8 +99,30 @@ def build_patch(patch_info):
         main_sql.write("set echo on\n\n")
         for file in files:
             if file["FOLDER_TYPE"] == '2':
-                schema = file["PATH"].split("\\")[1]
+                schema = file["PATH"].split("/")[1]
                 file_path = 'DB'
                 file_path += file["PATH"].replace("Database", "DB")
                 file_path = file_path.replace("StoredProcedures", "SP")
                 write_sql_commands(main_sql, file_path, schema)
+
+def refresh_patch_files(treeview, patch_info):
+    """
+    Refresh the files in the patch.
+    """
+    db = dbClass()
+    
+    # Clear existing items
+    for item in treeview.get_children():
+        treeview.delete(item)
+
+    patch_id = patch_info["PATCH_ID"]
+    files = db.get_patch_file_list(patch_id)
+    for file in files:
+        if file["FOLDER_TYPE"] == '1':
+            file_path = "webpage" + file["PATH"]
+        else:
+            file_path = 'Database' + file["PATH"]
+        treeview.insert("", "end", values=(
+            file["VERSION"], 
+            file_path,
+        ))

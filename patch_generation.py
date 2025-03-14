@@ -24,8 +24,9 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
     tempYN = False
     patch_id = db.create_patch_header(patch_letter, patch_version, patch_description, username, tempYN, vo.major, vo.minor, vo.revision)
     for file in selected_files:
+        fake_path = '$/Projects/SVN/' + file
         filename = os.path.basename(file)
-        file_id = db.create_patch_detail(patch_id, file, filename, get_file_revision(file))
+        file_id = db.create_patch_detail(patch_id, fake_path, filename, get_file_revision(file))
         
         md5checksum = get_md5_checksum(svn_path + "/" + file)
         db.set_md5(patch_id, file_id, md5checksum)
@@ -67,7 +68,7 @@ def create_patch_files(file, svn_path, patch_version_folder, main_sql):
             os.makedirs(os.path.dirname(dest_file), exist_ok=True)
             file_location = svn_path + "/" + file_path_no_svn
             shutil.copy2(file_location, dest_file)
-            schema = file_path_no_svn.split("\\")[1]
+            schema = file_path_no_svn.split("/")[1]
             write_sql_commands(main_sql, sql_path, schema)
 
 def write_sql_commands(sql_file, file_path, schema):
