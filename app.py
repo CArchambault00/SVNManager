@@ -6,6 +6,7 @@ from patches_operations import refresh_patches, refresh_patch_files
 from create_component import create_patches_treeview, create_file_listbox, create_top_frame
 from create_buttons import create_button_frame, create_button_frame_patch, create_button_frame_modify_patch, create_button_frame_patches
 from config import load_config, get_unset_var
+from dialog import set_username, set_instantclient, set_svn_folder
 
 
 def create_main_layout(root):
@@ -38,9 +39,10 @@ def create_main_layout(root):
 
 def switch_to_lock_unlock_menu():
     for widget in root.winfo_children():
-        widget.destroy()
+        if not isinstance(widget, tk.Menu):
+            widget.destroy()
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
-    username_entry,instant_client_button,svn_path_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "lock_unlock")
+    menu_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "lock_unlock")
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame(bottom_right_frame, files_listbox)
     refresh_locked_files(files_listbox)
@@ -50,9 +52,10 @@ def switch_to_lock_unlock_menu():
 
 def switch_to_patch_menu():
     for widget in root.winfo_children():
-        widget.destroy()
+        if not isinstance(widget, tk.Menu):
+            widget.destroy()
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
-    username_entry,instant_client_button,svn_path_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "patch")
+    menu_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "patch")
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame_patch(bottom_right_frame, files_listbox)
     refresh_locked_files(files_listbox)
@@ -63,9 +66,10 @@ def switch_to_patch_menu():
 def switch_to_patches_menu():
     config = load_config()
     for widget in root.winfo_children():
-        widget.destroy()
+        if not isinstance(widget, tk.Menu):
+            widget.destroy()
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
-    username_entry,instant_client_button,svn_path_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu,  "patches")
+    menu_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu,  "patches")
     
     # Create a Treeview to display patches
     patches_listbox = create_patches_treeview(bottom_left_frame)
@@ -79,9 +83,10 @@ def switch_to_patches_menu():
 
 def switch_to_modify_patch_menu(patch_details):
     for widget in root.winfo_children():
-        widget.destroy()
+        if not isinstance(widget, tk.Menu):
+            widget.destroy()
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
-    username_entry,instant_client_button,svn_path_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "modify_patch")
+    menu_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "modify_patch")
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame_modify_patch(bottom_right_frame, files_listbox, patch_details)
     refresh_patch_files(files_listbox, patch_details)
@@ -92,11 +97,45 @@ def switch_to_modify_patch_menu(patch_details):
 
 def setup_gui():
     global root
-    root = TkinterDnD.Tk()
-    root.iconbitmap("SVNManagericon.ico")
+    root = TkinterDnD.Tk()  # Initialize TkinterDnD root window
+    root.iconbitmap("SVNManagerIcon.ico")
     root.title("SVN Manager")
     root.geometry("900x600")
+
+    # Create the menu bar
+    menu_bar = tk.Menu(root)
     
+    config_menu = tk.Menu(menu_bar, tearoff=0)
+
+    config = load_config()
+    unset_var = get_unset_var()
+
+    menu_bar_config = menu_bar.add_cascade(
+        label="Config ❌" if unset_var else "Config ✔️",
+        menu=config_menu
+    )
+
+    config_menu_username = config_menu.add_command(
+        label="Username ❌" if "username" in unset_var else "Username ✔️",
+        command=lambda: set_username(config_menu, menu_bar)
+    )
+   
+    config_menu_instantClient = config_menu.add_command(
+        label="Instant client ❌" if "instant_client" in unset_var else "Instant client ✔️",
+        command=lambda: set_instantclient(config_menu, menu_bar)
+    )
+    
+    config_menu_svn = config_menu.add_command(
+        label="SVN folder ❌" if "svn_path" in unset_var else "SVN folder ✔️",
+        command=lambda: set_svn_folder(config_menu, menu_bar))
+
+    config_menu.add_separator()
+    config_menu.add_command(label="Exit", command=root.quit)
+
+    # Attach the menu to the root window
+    root.config(menu=menu_bar)
+
+    # Switch to the initial menu
     switch_to_lock_unlock_menu()
     
     return root
