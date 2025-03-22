@@ -1,10 +1,9 @@
 import tkinter as tk
 from tkinter import ttk
-from tkinterdnd2 import DND_FILES, TkinterDnD
-from dialog import select_svn_folder, set_username, select_instant_client_folder
-from config import load_config
+from tkinterdnd2 import DND_FILES
 from patches_operations import get_selected_patch
 from buttons_function import select_all_files, deselect_all_files, handle_drop
+
 def create_patches_treeview(parent):
     """
     Create a Treeview widget to display patches.
@@ -39,10 +38,12 @@ def create_patches_treeview(parent):
 
 def create_file_listbox(parent):
     
-    listbox = ttk.Treeview(parent, columns=("Status", "Files Path"), show="headings")
+    listbox = ttk.Treeview(parent, columns=("Status", "Version", "Files Path"), show="headings")
     listbox.heading("Status", text="Status")
+    listbox.heading("Version", text="Version")
     listbox.heading("Files Path", text="Files Path")
     listbox.column("Status", width=60, stretch=tk.NO)  # Set width of Status column to 25%
+    listbox.column("Version", width=60, stretch=tk.NO)  # Set width of Version column to 25%
     listbox.column("Files Path", width=800, stretch=tk.NO)  # Set width of Files Path column
 
     # Add horizontal scrollbar
@@ -64,6 +65,7 @@ def create_file_listbox(parent):
     listbox.dnd_bind('<<Drop>>', lambda event: handle_drop(event, listbox))
 
     return listbox
+
 
 def create_top_frame(parent, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, selected_menu):
   

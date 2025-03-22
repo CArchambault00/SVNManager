@@ -6,7 +6,7 @@ from patches_operations import refresh_patches, refresh_patch_files
 from create_component import create_patches_treeview, create_file_listbox, create_top_frame
 from create_buttons import create_button_frame, create_button_frame_patch, create_button_frame_modify_patch, create_button_frame_patches
 from config import load_config, get_unset_var
-from dialog import set_username, set_instantclient, set_svn_folder
+from native_topbar import initialize_native_topbar
 
 
 def create_main_layout(root):
@@ -88,12 +88,13 @@ def switch_to_modify_patch_menu(patch_details):
     top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root)
     menu_button = create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, switch_to_patches_menu, switch_to_modify_patch_menu, "modify_patch")
     files_listbox = create_file_listbox(bottom_left_frame)
-    create_button_frame_modify_patch(bottom_right_frame, files_listbox, patch_details)
+    create_button_frame_modify_patch(bottom_right_frame, files_listbox, patch_details,switch_to_modify_patch_menu)
     refresh_patch_files(files_listbox, patch_details)
 
     neededVar = get_unset_var()
     if neededVar:
         messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
+
 
 def setup_gui():
     global root
@@ -102,38 +103,7 @@ def setup_gui():
     root.title("SVN Manager")
     root.geometry("900x600")
 
-    # Create the menu bar
-    menu_bar = tk.Menu(root)
-    
-    config_menu = tk.Menu(menu_bar, tearoff=0)
-
-    config = load_config()
-    unset_var = get_unset_var()
-
-    menu_bar_config = menu_bar.add_cascade(
-        label="Config ❌" if unset_var else "Config ✔️",
-        menu=config_menu
-    )
-
-    config_menu_username = config_menu.add_command(
-        label="Username ❌" if "username" in unset_var else "Username ✔️",
-        command=lambda: set_username(config_menu, menu_bar)
-    )
-   
-    config_menu_instantClient = config_menu.add_command(
-        label="Instant client ❌" if "instant_client" in unset_var else "Instant client ✔️",
-        command=lambda: set_instantclient(config_menu, menu_bar)
-    )
-    
-    config_menu_svn = config_menu.add_command(
-        label="SVN folder ❌" if "svn_path" in unset_var else "SVN folder ✔️",
-        command=lambda: set_svn_folder(config_menu, menu_bar))
-
-    config_menu.add_separator()
-    config_menu.add_command(label="Exit", command=root.quit)
-
-    # Attach the menu to the root window
-    root.config(menu=menu_bar)
+    initialize_native_topbar(root)
 
     # Switch to the initial menu
     switch_to_lock_unlock_menu()

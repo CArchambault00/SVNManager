@@ -1,6 +1,4 @@
-import tkinter as tk
 from tkinter import messagebox
-
 from db_handler import dbClass
 
 revision, major, minor = 0, 0, 0

@@ -1,21 +1,20 @@
 import tkinter as tk
 from tkinter import ttk
-from tkinterdnd2 import DND_FILES, TkinterDnD
 from svn_operations import lock_files, unlock_files, refresh_locked_files
 from buttons_function import lock_selected_files, unlock_selected_files
 from patch_generation import generate_patch
-from buttons_function import insert_next_version, update_patch, modify_patch, build_existing_patch
-from patches_operations import refresh_patches
+from buttons_function import insert_next_version, modify_patch, build_existing_patch
+from patches_operations import refresh_patches, update_patch
 from config import load_config
 
 def create_button_frame(parent, files_listbox):
-    tk.Button(parent, text="Refresh lock files", command=lambda: refresh_locked_files(files_listbox)).pack(side="top", pady=10)
-
-    tk.Button(parent, text="Lock All", command=lambda: lock_files([files_listbox.item(item, "values")[1] for item in files_listbox.get_children()], files_listbox, files_listbox)).pack(side="top", pady=0)
-    tk.Button(parent, text="Unlock All", command=lambda: unlock_files([files_listbox.item(item, "values")[1] for item in files_listbox.get_children()], files_listbox, files_listbox)).pack(side="top", pady=10)
-
-    tk.Button(parent, text="Lock Selected", command=lambda: lock_selected_files(files_listbox)).pack(side="top", pady=5)
-    tk.Button(parent, text="Unlock Selected", command=lambda: unlock_selected_files(files_listbox)).pack(side="top", pady=5)
+    tk.Button(parent, text="Refresh lock files", command=lambda: refresh_locked_files(files_listbox), background="#80DDFF").pack(side="top", pady=20)
+    tk.Frame(parent, height=20).pack(side="top")
+    tk.Button(parent, text="Lock All", command=lambda: lock_files([files_listbox.item(item, "values")[2] for item in files_listbox.get_children()], files_listbox), background="#FF8080").pack(side="top", pady=5)
+    tk.Button(parent, text="Lock Selected", command=lambda: lock_selected_files(files_listbox), background="#FF8080").pack(side="top", pady=5)
+    tk.Frame(parent, height=20).pack(side="top")
+    tk.Button(parent, text="Unlock All", command=lambda: unlock_files([files_listbox.item(item, "values")[2] for item in files_listbox.get_children()], files_listbox), background="#44FF80").pack(side="top", pady=5)
+    tk.Button(parent, text="Unlock Selected", command=lambda: unlock_selected_files(files_listbox), background="#44FF80").pack(side="top", pady=5)
 
 def create_button_frame_patch(parent, files_listbox):
     ## Patch Version entry
@@ -34,7 +33,7 @@ def create_button_frame_patch(parent, files_listbox):
     patch_version_entry.pack(side="left", padx=5)
 
     ## Next Version Button
-    tk.Button(patch_version_frame, text="Next Version", command=lambda: insert_next_version(patch_version_letter.get(), patch_version_entry)).pack(side="left", padx=5)
+    tk.Button(patch_version_frame, text="Next Version", command=lambda: insert_next_version(patch_version_letter.get(), patch_version_entry), background="#80DDFF").pack(side="left", padx=5)
 
     ## Add a section to write the patch description
     patch_description_frame = tk.Frame(parent)
@@ -46,9 +45,9 @@ def create_button_frame_patch(parent, files_listbox):
     patch_description_entry = tk.Text(patch_description_frame, height=10, width=40)  # Changed to Text widget
     patch_description_entry.pack(side="top", padx=5, fill="both", expand=True)
 
-    tk.Button(parent, text="Generate Patch", command=lambda: generate_patch([files_listbox.item(item, "values")[1] for item in files_listbox.selection()], patch_version_letter.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip())).pack(side="top", pady=5)
+    tk.Button(parent, text="Generate Patch", command=lambda: generate_patch([files_listbox.item(item, "values")[2] for item in files_listbox.selection()], patch_version_letter.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip()), background="#FF8080").pack(side="top", pady=5)
 
-def create_button_frame_modify_patch(parent, files_listbox, patch_details):
+def create_button_frame_modify_patch(parent, files_listbox, patch_details, switch_to_modify_patch_menu):
     patch_version_frame = tk.Frame(parent)
     patch_version_frame.pack(side="top", pady=5)
 
@@ -64,7 +63,7 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details):
     patch_version_entry.insert(0, patch_details['NAME'][1:])  # Set to the selected patch's version number
     patch_version_entry.pack(side="left", padx=5)
 
-    tk.Button(patch_version_frame, text="Next Version", command=lambda: insert_next_version(patch_version_letter.get(), patch_version_entry)).pack(side="left", padx=5)
+    tk.Button(patch_version_frame, text="Next Version", command=lambda: insert_next_version(patch_version_letter.get(), patch_version_entry), background="#80DDFF").pack(side="left", padx=5)
 
     patch_description_frame = tk.Frame(parent)
     patch_description_frame.pack(side="top", pady=5, fill="both", expand=True)
@@ -76,7 +75,7 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details):
     patch_description_entry.insert("1.0", patch_details['COMMENTS'])  # Set to the selected patch's description
     patch_description_entry.pack(side="top", padx=5, fill="both", expand=True)
     
-    tk.Button(parent, text="Update Patch", command=lambda: update_patch([files_listbox.item(item, "values")[1] for item in files_listbox.selection()], patch_details["PATCH_ID"], patch_version_letter.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip())).pack(side="top", pady=5)
+    tk.Button(parent, text="Update Patch", command=lambda: update_patch([files_listbox.item(item, "values")[2] for item in files_listbox.selection()], patch_details["PATCH_ID"], patch_version_letter.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip(),switch_to_modify_patch_menu), background="#FF8080").pack(side="top", pady=5)
 
 def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_menu):
     config = load_config()
@@ -90,10 +89,10 @@ def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_
     # On patch version change, refresh the patches
     patch_version_letter.bind("<<ComboboxSelected>>", lambda event: refresh_patches(patches_listbox, False, patch_version_letter.get(), username))
 
-    tk.Button(parent, text="Refresh Patches", command=lambda: refresh_patches(patches_listbox, False, patch_version_letter.get(), username)).pack(side="top", pady=5)
+    tk.Button(parent, text="Refresh Patches", command=lambda: refresh_patches(patches_listbox, False, patch_version_letter.get(), username), background="#80DDFF").pack(side="top", pady=5)
 
     # Add a button to modify the selected patch
-    tk.Button(parent, text="Modify Patch", command=lambda: modify_patch([patches_listbox.item(item, "values") for item in patches_listbox.selection()], switch_to_modify_patch_menu)).pack(side="top", pady=5)
+    tk.Button(parent, text="Modify Patch", command=lambda: modify_patch([patches_listbox.item(item, "values") for item in patches_listbox.selection()], switch_to_modify_patch_menu), background="#FF8080").pack(side="top", pady=5)
 
     # Generate patch
-    tk.Button(parent, text="Build Patch", command=lambda: build_existing_patch([patches_listbox.item(item, "values") for item in patches_listbox.selection()])).pack(side="top", pady=5)
+    tk.Button(parent, text="Build Patch", command=lambda: build_existing_patch([patches_listbox.item(item, "values") for item in patches_listbox.selection()]), background="#FCFF80").pack(side="top", pady=5)

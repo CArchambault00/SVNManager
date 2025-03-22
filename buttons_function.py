@@ -1,22 +1,20 @@
 import tkinter as tk
-from tkinter import ttk
-from svn_operations import lock_files, unlock_files, refresh_locked_files
+from svn_operations import lock_files, unlock_files
 from version_operation import next_version
 from patches_operations import get_full_patch_info, set_selected_patch, build_patch
-from db_handler import dbClass
-from utils import get_md5_checksum
 import os
-from svn_operations import get_file_revision, commit_files
+from svn_operations import get_file_info
 from config import load_config
 
+PATCH_DIR = "D:/cyframe/jtdev/Patches/Current"
 
 def lock_selected_files(files_listbox):
-    selected_files = [files_listbox.item(item, "values")[1] for item in files_listbox.selection()]
-    lock_files(selected_files, files_listbox, files_listbox)
+    selected_files = [files_listbox.item(item, "values")[2] for item in files_listbox.selection()]
+    lock_files(selected_files, files_listbox)
 
 def unlock_selected_files(files_listbox):
-    selected_files = [files_listbox.item(item, "values")[1] for item in files_listbox.selection()]
-    unlock_files(selected_files, files_listbox, files_listbox)
+    selected_files = [files_listbox.item(item, "values")[2] for item in files_listbox.selection()]
+    unlock_files(selected_files, files_listbox)
 
 def insert_next_version(module, patch_version_entry):
     new_version = next_version(module)
@@ -35,6 +33,12 @@ def select_all_files(event, files_listbox):
     for item in files_listbox.get_children():
         files_listbox.selection_add(item)
 
+def check_files_is_present(files_listbox, files):
+    for file in files:
+        for item in files_listbox.get_children():
+            if files_listbox.item(item, "values")[2] == file:
+                return True
+
 def handle_drop(event, listbox):
     files = listbox.tk.splitlist(event.data)
     config = load_config()
@@ -45,7 +49,17 @@ def handle_drop(event, listbox):
             if file.startswith(svn_path):
                 file = file.replace("\\", "/")
                 file = file.replace(svn_path + "/", "")
-                listbox.insert('', 'end', values=('unlocked', file))
+                if not check_files_is_present(listbox, [file]):
+                    lock_by_user, lock_owner, revision = get_file_info(file)
+                    print(lock_by_user, lock_owner, revision)
+                    if lock_by_user:
+                        listbox.insert('', 'end', values=('locked',revision, file))
+                    elif lock_by_user== False and lock_owner == "":
+                        listbox.insert('', 'end', values=('unlocked',revision, file))
+                    else:
+                        add_file = tk.messagebox.askyesno("File is locked", f"The file {file} is locked by {lock_owner}. Do you want to add it to the patch anyway?")
+                        if add_file:
+                            listbox.insert('', 'end', values=('@locked',revision, file))
             else:
                 files_outside_svn.append(file)
         if os.path.isdir(file):
@@ -55,27 +69,20 @@ def handle_drop(event, listbox):
                     if file.startswith(svn_path):
                         file = file.replace("\\", "/")
                         file = file.replace(svn_path + "/", "")
-                        listbox.insert('', 'end', values=('unlocked', file))
+                        if not check_files_is_present(listbox, [file]):
+                            lock_by_user, lock_owner,revision = get_file_info(file)
+                            if lock_by_user:
+                                listbox.insert('', 'end', values=('locked',revision, file))
+                            elif lock_by_user== False and lock_owner == "":
+                                listbox.insert('', 'end', values=('unlocked',revision, file))
+                            else:
+                                add_file = tk.messagebox.askyesno("File is locked", f"The file {file} is locked by {lock_owner}. Do you want to add it to the patch anyway?")
+                                if add_file:
+                                    listbox.insert('', 'end', values=('@locked',revision, file))
                     else:
                         files_outside_svn.append(file)
     if files_outside_svn:
         tk.messagebox.showerror("Error", "The following files are not in the SVN repository and will not be added to the patch: \n" + "\n".join(files_outside_svn))
-        
-
-def update_patch(selected_files, patch_id, patch_version_letter, patch_version_entry, patch_description):
-    db = dbClass()
-    config = load_config()
-    svn_path = config.get("svn_path")
-    commit_files(selected_files)
-    db.update_patch_header(patch_id, patch_version_letter, patch_version_entry, patch_description)
-    db.delete_patch_detail(patch_id)
-    for file in selected_files:
-        fake_path = '$/Projects/SVN/' + file
-        filename = os.path.basename(file)
-        file_id = db.create_patch_detail(patch_id, fake_path, filename, get_file_revision(file))
-        
-        md5checksum = get_md5_checksum(svn_path + "/" + file)
-        db.set_md5(patch_id, file_id, md5checksum)
 
 def modify_patch(selected_patch, switch_to_modify_patch_menu):
     if selected_patch:
@@ -89,3 +96,4 @@ def build_existing_patch(selected_patch):
         patch_details = selected_patch[0]  # Assuming selected_patch is a list of selected items
         full_patch_info = get_full_patch_info(patch_details[0])
         build_patch(full_patch_info)
+        

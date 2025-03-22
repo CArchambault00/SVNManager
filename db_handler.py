@@ -1,8 +1,6 @@
 import oracledb
-from typing import Optional, List, Dict, Any
-import os
+from typing import Optional, List, Dict
 from tkinter import messagebox
-import sys
 from config import load_config
 
 class dbClass:
