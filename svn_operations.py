@@ -193,3 +193,30 @@ def revert_files(selected_files):
                 print(f"Reverted file: {file}")
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred while reverting files: {e}")
+
+def copy_InstallConfig(destination):
+    # Copy InstallConfig.exe from the remote SVN Tools/Misc Tools/InstallConfig folder to the local destination
+    config = load_config()
+    svn_path = config.get("svn_path")
+    try:
+        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Misc Tools/InstallConfig/InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL,)
+    except subprocess.CalledProcessError as e:
+        messagebox.showerror("Error", f"Failed to copy InstallConfig.exe: {e}")
+
+def copy_RunScript(destination):
+    # Copy RunScript.exe from the remote SVN Tools/Misc Tools/RunScript folder to the local destination
+    config = load_config()
+    svn_path = config.get("svn_path")
+    try:
+        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Misc Tools/InstallConfig/RunScript.bat", destination], check=True,  stdout=subprocess.DEVNULL,)
+    except subprocess.CalledProcessError as e:
+        messagebox.showerror("Error", f"Failed to copy RunScript.exe: {e}")
+
+def copy_UnderTestInstallConfig(destination):
+    # Copy InstallConfig.exe from the remote SVN Tools/Misc Tools/InstallConfig folder to the local destination
+    config = load_config()
+    svn_path = config.get("svn_path")
+    try:
+        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Test/UNDERTEST_InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL,)
+    except subprocess.CalledProcessError as e:
+        messagebox.showerror("Error", f"Failed to copy InstallConfig.exe: {e}")

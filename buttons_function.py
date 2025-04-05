@@ -51,7 +51,6 @@ def handle_drop(event, listbox):
                 file = file.replace(svn_path + "/", "")
                 if not check_files_is_present(listbox, [file]):
                     lock_by_user, lock_owner, revision = get_file_info(file)
-                    print(lock_by_user, lock_owner, revision)
                     if lock_by_user:
                         listbox.insert('', 'end', values=('locked',revision, file))
                     elif lock_by_user== False and lock_owner == "":

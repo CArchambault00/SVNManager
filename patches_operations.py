@@ -1,13 +1,13 @@
 # patches_operation.py
 from db_handler import dbClass
-from svn_operations import get_file_specific_version, get_file_info, commit_files, revert_files, get_file_revision
+from svn_operations import get_file_specific_version, get_file_info, commit_files, revert_files, get_file_revision, copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig
 from patch_generation import PATCH_DIR, write_sql_commands
 import os
 from config import load_config
 from patch_generation import create_patch_files
 import tkinter as tk
 import time
-from utils import get_md5_checksum, cleanup_files
+from utils import get_md5_checksum, cleanup_files, create_depend_txt
 
 patch_info_dict = {}
 
@@ -74,54 +74,69 @@ def get_selected_patch():
 
 
 def build_patch(patch_info):
-
-    db = dbClass()
+    try:
+        db = dbClass()
+        
+        patch_id = patch_info["PATCH_ID"]
+        
+        os.makedirs(PATCH_DIR, exist_ok=True)
+        files = db.get_patch_file_list(patch_id)
+        config = load_config()
+        svn_path = config.get("svn_path")
     
-    patch_id = patch_info["PATCH_ID"]
-    
-    os.makedirs(PATCH_DIR, exist_ok=True)
-    files = db.get_patch_file_list(patch_id)
-    config = load_config()
-    svn_path = config.get("svn_path")
-   
-    patch_version_folder = os.path.join(PATCH_DIR, patch_info["NAME"])
-    os.makedirs(patch_version_folder, exist_ok=True)
-    for file in files:
-        if file["FOLDER_TYPE"] == '1':
-            file_path = file["PATH"]
-            file_location = svn_path + "/webpage" + file["PATH"]
-            destination_folder = patch_version_folder + "/Web"
-        else:
-            file_path = file["PATH"]
-            file_path = file_path.replace("StoredProcedures", "SP")
-            file_location = svn_path + "/Database" + file["PATH"]
-            destination_folder = patch_version_folder + "/DB"
-        get_file_specific_version(file_location, file_path, file["NAME"], file["VERSION"], destination_folder)
-
-    with open(os.path.join(patch_version_folder, "ReadMe.txt"), "w") as readme:
-        readme.write("Patch " + patch_info["NAME"] + "\n")
-        readme.write(patch_info["USER_ID"] + "\n")
-        readme.write(str(patch_info["CREATION_DATE"]) + "\n")
-        readme.write("\n")
-        readme.write(patch_info["COMMENTS"])
-        readme.write("\n")
-        readme.write("\n")
-        readme.write("Patch Content:\n")
-        readme.write("\n")
+        patch_version_folder = os.path.join(PATCH_DIR, patch_info["NAME"])
+        os.makedirs(patch_version_folder, exist_ok=True)
         for file in files:
-            readme.write(file["PATH"] + "\n")
-
-    with open(os.path.join(patch_version_folder, "MainSQL.sql"), "w") as main_sql:
-        main_sql.write("promp &&HOST\n")
-        main_sql.write("promp &&PERSON\n")
-        main_sql.write("set echo on\n\n")
-        for file in files:
-            if file["FOLDER_TYPE"] == '2':
-                schema = file["PATH"].split("/")[1]
-                file_path = 'DB'
-                file_path += file["PATH"].replace("Database", "DB")
+            if file["FOLDER_TYPE"] == '1':
+                file_path = file["PATH"]
+                file_location = svn_path + "/webpage" + file["PATH"]
+                destination_folder = patch_version_folder + "/Web"
+            else:
+                file_path = file["PATH"]
                 file_path = file_path.replace("StoredProcedures", "SP")
-                write_sql_commands(main_sql, file_path, schema)
+                file_location = svn_path + "/Database" + file["PATH"]
+                destination_folder = patch_version_folder + "/DB"
+            get_file_specific_version(file_location, file_path, file["NAME"], file["VERSION"], destination_folder)
+
+        with open(os.path.join(patch_version_folder, "ReadMe.txt"), "w") as readme:
+            readme.write("Patch " + patch_info["NAME"] + "\n")
+            readme.write(patch_info["USER_ID"] + "\n")
+            readme.write(str(patch_info["CREATION_DATE"]) + "\n")
+            readme.write("\n")
+            readme.write(patch_info["COMMENTS"])
+            readme.write("\n")
+            readme.write("\n")
+            readme.write("Patch Content:\n")
+            readme.write("\n")
+            webpage_files = [file for file in files if file["FOLDER_TYPE"] == '1']
+            database_files = [file for file in files if file["FOLDER_TYPE"] == '2']
+            readme.write("Webpage Files:\n")
+            for file in webpage_files:
+                readme.write("webpage"+ file["PATH"] + " (" + str(file["VERSION"]) + ")" + "\n")
+            readme.write("\n")
+            readme.write("Database Files:\n")
+            for file in database_files:
+                readme.write("Database"+file["PATH"] + " (" + str(file["VERSION"]) + ")" + "\n")
+        with open(os.path.join(patch_version_folder, "MainSQL.sql"), "w") as main_sql:
+            main_sql.write("promp &&HOST\n")
+            main_sql.write("promp &&PERSON\n")
+            main_sql.write("set echo on\n\n")
+            for file in files:
+                if file["FOLDER_TYPE"] == '2':
+                    schema = file["PATH"].split("/")[1]
+                    file_path = 'DB'
+                    file_path += file["PATH"].replace("Database", "DB")
+                    file_path = file_path.replace("StoredProcedures", "SP")
+                    write_sql_commands(main_sql, file_path, schema)
+        copy_InstallConfig(patch_version_folder)
+        copy_RunScript(patch_version_folder)
+        copy_UnderTestInstallConfig(patch_version_folder)
+        create_depend_txt(db, patch_version_folder, patch_id)
+        tk.messagebox.showinfo("Info", "Patch built successfully!")
+    except Exception as e:
+        db.conn.rollback()
+        cleanup_files(patch_version_folder)
+        tk.messagebox.showerror("Error", f"Failed to build patch: {e}")
 
 def refresh_patch_files(treeview, patch_info):
     """
@@ -180,8 +195,16 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
             readme.write("\n")
             readme.write("Patch Content:\n")
             readme.write("\n")
-            for file in selected_files:
-                readme.write(file + "\n")
+            # get file that start with "webpage"
+            webpage_files = [file for file in selected_files if file.startswith("webpage")]
+            database_files = [file for file in selected_files if not file.startswith("webpage")]
+            readme.write("Webpage Files:\n")
+            for file in webpage_files:
+                readme.write(file + " (" + get_file_revision(file) + ")" + "\n")
+            readme.write("\n")
+            readme.write("Database Files:\n")
+            for file in database_files:
+                readme.write(file + " (" + get_file_revision(file) + ")" + "\n")
         with open(os.path.join(patch_version_folder, "MainSQL.sql"), "w") as main_sql:
             main_sql.write("promp &&HOST\n")
             main_sql.write("promp &&PERSON\n")
@@ -189,6 +212,10 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
             for file in selected_files:
                 # create a copy of the file in the patch directory in the patch version folder
                 create_patch_files(file, svn_path, patch_version_folder, main_sql)
+        copy_InstallConfig(patch_version_folder)
+        copy_RunScript(patch_version_folder)
+        copy_UnderTestInstallConfig(patch_version_folder)
+        create_depend_txt(db, patch_version_folder, patch_id)
         db.conn.commit()
         refresh_patches_dict(False, patch_version_letter)
         full_patch_info = get_full_patch_info(patch_version_letter+patch_version_entry)

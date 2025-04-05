@@ -1,11 +1,11 @@
 import os
 import shutil
-from svn_operations import commit_files, get_file_revision, revert_files
+from svn_operations import commit_files, get_file_revision, revert_files, copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig
 from tkinter import messagebox
 import time
 import version_operation as vo
 from db_handler import dbClass
-from utils import get_md5_checksum, cleanup_files
+from utils import get_md5_checksum, cleanup_files, create_depend_txt
 from config import load_config
 
 PATCH_DIR = "D:/cyframe/jtdev/Patches/Current"
@@ -47,8 +47,15 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
             readme.write("\n")
             readme.write("Patch Content:\n")
             readme.write("\n")
-            for file in selected_files:
-                readme.write(file + "\n")
+            webpage_files = [file for file in selected_files if file.startswith("webpage")]
+            database_files = [file for file in selected_files if not file.startswith("webpage")]
+            readme.write("Webpage Files:\n")
+            for file in webpage_files:
+                readme.write(file + " (" + get_file_revision(file) + ")" + "\n")
+            readme.write("\n")
+            readme.write("Database Files:\n")
+            for file in database_files:
+                readme.write(file + " (" + get_file_revision(file) + ")" + "\n")
         with open(os.path.join(patch_version_folder, "MainSQL.sql"), "w") as main_sql:
             main_sql.write("promp &&HOST\n")
             main_sql.write("promp &&PERSON\n")
@@ -56,6 +63,10 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
             for file in selected_files:
                 # create a copy of the file in the patch directory in the patch version folder
                 create_patch_files(file, svn_path, patch_version_folder, main_sql)
+        copy_InstallConfig(patch_version_folder)
+        copy_RunScript(patch_version_folder)
+        copy_UnderTestInstallConfig(patch_version_folder)
+        create_depend_txt(db, patch_version_folder, patch_id)
         db.conn.commit()
         messagebox.showinfo("Info", "Patch created successfully!")
     except Exception as e:
