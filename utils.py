@@ -24,10 +24,15 @@ def create_depend_txt(db_handler, patch_version_folder, patch_id):
     patch_files = db_handler.get_patch_file_list(patch_id)
     depend_content = ""
     for file_info in patch_files:
-        folder_path = file_info['PATH']
+        folder_path = ""
+
+        if file_info['FOLDER_TYPE'] == '1':
+            folder_path = "$/Projects/SVN/webpage" + file_info['PATH']
+        elif file_info['FOLDER_TYPE'] == '2':
+            folder_path = "$/Projects/SVN/Database" + file_info['PATH']
+
         file_name = file_info['NAME']
         current_version = file_info['VERSION']
-        
         # Get previous versions of this file from other patches
         previous_versions = db_handler.get_folder_patch_list(folder_path)
         
@@ -44,7 +49,6 @@ def create_depend_txt(db_handler, patch_version_folder, patch_id):
                 depend_content += f"{build_number}\n"
                 # Original VB6 code also included MD5 checksum in comments:
                 # depend_content += f"{build_number},'{pv['MD5_CHECKSUM']}',{pv['FILE_ID']}\n"
-    print(depend_content)
     if depend_content:
         with open(patch_version_folder + "/depend.txt", 'w') as f:
             f.write(depend_content)
@@ -65,6 +69,7 @@ def extract_build_number(patch_name):
     
     # Determine application code
     first_char = patch_name[0].upper()
+
     if first_char == 'V':
         app_code = 'BT'
         version_part = patch_name[1:]
@@ -73,6 +78,7 @@ def extract_build_number(patch_name):
         version_part = patch_name[1:]
     elif first_char == 'S':
         app_code = 'CORE_SVN'
+        version_part = patch_name[1:]
     elif first_char == 'E':
         app_code = 'EXT'
         version_part = patch_name[1:]

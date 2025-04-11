@@ -20,6 +20,12 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
         if not patch_version:
             messagebox.showerror("Error", "Patch version is required!")
             return
+        if selected_files is None or len(selected_files) == 0:
+            # Confirmation dialog for no files selected
+            if messagebox.askyesno("No Files Selected", "No files selected. Do you want to create an empty patch?"):
+                selected_files = []
+            else:
+                return
         os.makedirs(PATCH_DIR, exist_ok=True)
         commit_files(selected_files)
 
@@ -57,12 +63,18 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
             for file in database_files:
                 readme.write(file + " (" + get_file_revision(file) + ")" + "\n")
         with open(os.path.join(patch_version_folder, "MainSQL.sql"), "w") as main_sql:
-            main_sql.write("promp &&HOST\n")
-            main_sql.write("promp &&PERSON\n")
+            main_sql.write("prompt &&HOST\n")
+            main_sql.write("prompt &&PERSON\n")
             main_sql.write("set echo on\n\n")
             for file in selected_files:
                 # create a copy of the file in the patch directory in the patch version folder
                 create_patch_files(file, svn_path, patch_version_folder, main_sql)
+            main_sql.write("set echo on\n")
+            main_sql.write("connect CMATC/CMATC@&&HOST\n")
+            main_sql.write("CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION('CORE_SVN'," + vo.major + "," + vo.minor + "," + vo.revision + ",'&&PERSON' );\n")
+            main_sql.write("commit;\n")
+            main_sql.write("\n")
+            main_sql.write("exit;\n")
         copy_InstallConfig(patch_version_folder)
         copy_RunScript(patch_version_folder)
         copy_UnderTestInstallConfig(patch_version_folder)

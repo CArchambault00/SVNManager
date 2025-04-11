@@ -7,7 +7,8 @@ from config import load_config
 from patch_generation import create_patch_files
 import tkinter as tk
 import time
-from utils import get_md5_checksum, cleanup_files, create_depend_txt
+from utils import get_md5_checksum, cleanup_files, create_depend_txt,extract_build_number
+from tkinter import messagebox
 
 patch_info_dict = {}
 
@@ -118,8 +119,8 @@ def build_patch(patch_info):
             for file in database_files:
                 readme.write("Database"+file["PATH"] + " (" + str(file["VERSION"]) + ")" + "\n")
         with open(os.path.join(patch_version_folder, "MainSQL.sql"), "w") as main_sql:
-            main_sql.write("promp &&HOST\n")
-            main_sql.write("promp &&PERSON\n")
+            main_sql.write("prompt &&HOST\n")
+            main_sql.write("prompt &&PERSON\n")
             main_sql.write("set echo on\n\n")
             for file in files:
                 if file["FOLDER_TYPE"] == '2':
@@ -128,6 +129,16 @@ def build_patch(patch_info):
                     file_path += file["PATH"].replace("Database", "DB")
                     file_path = file_path.replace("StoredProcedures", "SP")
                     write_sql_commands(main_sql, file_path, schema)
+            main_sql.write("set echo on\n")
+            main_sql.write("connect CMATC/CMATC@&&HOST\n")
+            version = extract_build_number(patch_info["NAME"])
+            major = version.split(",")[1]
+            minor = version.split(",")[2]
+            revision = version.split(",")[3]
+            main_sql.write("CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION('CORE_SVN'," + major + "," + minor + "," + revision + ",'&&PERSON' );\n")
+            main_sql.write("commit;\n")
+            main_sql.write("\n")
+            main_sql.write("exit;\n")
         copy_InstallConfig(patch_version_folder)
         copy_RunScript(patch_version_folder)
         copy_UnderTestInstallConfig(patch_version_folder)
@@ -171,6 +182,12 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
     svn_path = config.get("svn_path")
     username = config.get("username")
     try:
+        if selected_files is None or len(selected_files) == 0:
+            # Confirmation dialog for no files selected
+            if messagebox.askyesno("No Files Selected", "No files selected. Do you want to modify the patch to remove the files?"):
+                selected_files = []
+            else:
+                return
         os.makedirs(PATCH_DIR, exist_ok=True)
         commit_files(selected_files)
         db.conn.begin()
