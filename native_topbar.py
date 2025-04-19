@@ -21,11 +21,6 @@ def initialize_native_topbar(root):
         label="Username ❌" if "username" in unset_var else "Username ✔️",
         command=lambda: set_username(config_menu, menu_bar)
     )
-   
-    config_menu.add_command(
-        label="Instant client ❌" if "instant_client" in unset_var else "Instant client ✔️",
-        command=lambda: set_instantclient(config_menu, menu_bar)
-    )
     
     config_menu.add_command(
         label="SVN folder ❌" if "svn_path" in unset_var else "SVN folder ✔️",

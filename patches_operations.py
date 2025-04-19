@@ -159,6 +159,10 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
         db.conn.begin()
         db.update_patch_header(patch_id, patch_version_letter, patch_version_entry, patch_description)
         db.delete_patch_detail(patch_id)
+
+        patch_name = patch_version_letter + patch_version_entry
+        patch_version_folder = os.path.join(PATCH_DIR, patch_name)
+        os.makedirs(patch_version_folder, exist_ok=True)
         
         for file in selected_files:
             fake_path = '$/Projects/SVN/' + file
@@ -166,22 +170,13 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
             file_id = db.create_patch_detail(patch_id, fake_path, filename, get_file_revision(file))
             md5checksum = get_md5_checksum(f"{svn_path}/{file}")
             db.set_md5(patch_id, file_id, md5checksum)
-        
-        patch_name = patch_version_letter + patch_version_entry
-        patch_version_folder = os.path.join(PATCH_DIR, patch_name)
-        os.makedirs(patch_version_folder, exist_ok=True)
+            create_patch_files(file, svn_path, patch_version_folder)
         
         create_readme_file(patch_version_folder, patch_name, username, 
                          time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)
         
         create_main_sql_file(patch_version_folder, selected_files, svn_path=svn_path, 
                            patch_name=patch_name)
-        
-        webpage_files = [file for file in selected_files if isinstance(file, dict) and file["FOLDER_TYPE"] == '1' or 
-                        isinstance(file, str) and file.startswith("webpage")]
-        
-        for file in webpage_files:
-            create_patch_files(file, svn_path, patch_version_folder, None)
         
         
         setup_patch_folder(patch_version_folder)

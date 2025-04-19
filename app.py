@@ -99,7 +99,7 @@ def switch_to_modify_patch_menu(patch_details):
 def setup_gui():
     global root
     root = TkinterDnD.Tk()  # Initialize TkinterDnD root window
-    root.iconbitmap("SVNManagerIcon.ico")
+    #root.iconbitmap("SVNManagerIcon.ico")
     root.title("SVN Manager")
     root.geometry("900x600")
 

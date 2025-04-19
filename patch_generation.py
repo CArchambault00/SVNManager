@@ -31,16 +31,19 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
         patch_id = db.create_patch_header(patch_letter, patch_version, patch_description, username, 
                                         False, vo.major, vo.minor, vo.revision)
         
+        patch_name = patch_letter + patch_version
+        patch_version_folder = os.path.join(PATCH_DIR, patch_name)
+        os.makedirs(patch_version_folder, exist_ok=True)
+        
         for file in selected_files:
             fake_path = '$/Projects/SVN/' + file
             filename = os.path.basename(file)
             file_id = db.create_patch_detail(patch_id, fake_path, filename, get_file_revision(file))
             md5checksum = get_md5_checksum(f"{svn_path}/{file}")
             db.set_md5(patch_id, file_id, md5checksum)
+            create_patch_files(file, svn_path, patch_version_folder)
         
-        patch_name = patch_letter + patch_version
-        patch_version_folder = os.path.join(PATCH_DIR, patch_name)
-        os.makedirs(patch_version_folder, exist_ok=True)
+       
         
         create_readme_file(patch_version_folder, patch_name, username, 
                          time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)
@@ -48,12 +51,7 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
         create_main_sql_file(patch_version_folder, selected_files, svn_path=svn_path, 
                             version_info=(vo.major, vo.minor, vo.revision))
         
-        webpage_files = [file for file in selected_files if isinstance(file, dict) and file["FOLDER_TYPE"] == '1' or 
-                        isinstance(file, str) and file.startswith("webpage")]
-        
-        for file in webpage_files:
-            create_patch_files(file, svn_path, patch_version_folder, None)
-        
+            
         setup_patch_folder(patch_version_folder)
         create_depend_txt(db, patch_version_folder, patch_id)
         

@@ -131,7 +131,7 @@ def write_sql_commands(sql_file, file_path, schema):
     sql_file.write("show error\n")
     sql_file.write("set echo on\n\n")
 
-def create_patch_files(file, svn_path, patch_version_folder, main_sql):
+def create_patch_files(file, svn_path, patch_version_folder):
     """Create patch files in the appropriate locations."""
     file_path_no_svn = file
     if file_path_no_svn.startswith("webpage"):
@@ -147,8 +147,6 @@ def create_patch_files(file, svn_path, patch_version_folder, main_sql):
         os.makedirs(os.path.dirname(dest_file), exist_ok=True)
         file_location = f"{svn_path}/{file_path_no_svn}"
         shutil.copy2(file_location, dest_file)
-        schema = file_path_no_svn.split("/")[1]
-        write_sql_commands(main_sql, sql_path, schema)
 
 def create_readme_file(patch_version_folder, patch_name, username, creation_date, patch_description, files):
     """Create a ReadMe.txt file with patch information."""
@@ -190,8 +188,11 @@ def create_main_sql_file(patch_version_folder, files, patch_name=None, svn_path=
                 schema = file["PATH"].split("/")[1]
                 file_path = 'DB' + file["PATH"].replace("Database", "DB").replace("StoredProcedures", "SP")
                 write_sql_commands(main_sql, file_path, schema)
-            elif isinstance(file, str) and not file.startswith("webpage"):
-                create_patch_files(file, svn_path, patch_version_folder, main_sql)
+            elif isinstance(file, str) and file.startswith("Database"):
+                file_path = file.replace("Database", "DB")
+                file_path = file_path.replace("StoredProcedures", "SP")
+                schema = file.split("/")[1]
+                write_sql_commands(main_sql, file_path, schema)
         
         main_sql.write("set echo on\n")
         main_sql.write("connect CMATC/CMATC@&&HOST\n")

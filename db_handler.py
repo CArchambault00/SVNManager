@@ -2,6 +2,7 @@ import oracledb
 from typing import Optional, List, Dict
 from tkinter import messagebox
 from config import load_config
+import os
 
 class dbClass:
     def __init__(self):
@@ -9,22 +10,26 @@ class dbClass:
         self.connect()
 
     def connect(self):
-        config = load_config()
-        INSTANT_CLIENT = config.get("instant_client", "")
         try:
             # Initialize Oracle client
-            oracledb.init_oracle_client(lib_dir=INSTANT_CLIENT)
-            
+            instantclient_path = os.path.join(os.path.dirname(__file__), "instantclient_12_1")
+            oracledb.init_oracle_client(lib_dir=instantclient_path)
             # Connect to the Oracle database
             self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='PROD_CYFRAME')
         except oracledb.Error as e:
-            if INSTANT_CLIENT:
-                if ("DPI-1047" in str(e)):
-                    messagebox.showerror("Database Error", f"The selected Instant Client directory is invalid, Application will not work properly")
-                else:
-                    messagebox.showerror("Database Error", f"Failed to connect to the database, Application will not work properly\n{e}")
-            else:
-                messagebox.showerror("CONFIGURATION ERROR", f"Failed to connect to the database, Application will not work properly\nWITH THE PROPER BUTTON, YOU MUST SELECT THE INSTANT CLIENT DIRECTORY!!!\n{e}")
+            messagebox.showerror("Database Error", f"Failed to connect to the database, Application will not work properly\n{e}")
+        # config = load_config()
+        # hostname = config.get("db_host", "db04.intranet.cyframe.com")
+        # port = config.get("db_port", "1521")
+        # service_name = config.get("db_service", "CYFRAMEPROD")
+
+        # dsn = f"{hostname}:{port}/{service_name}"
+
+        # self.conn = oracledb.connect(
+        #     user=config.get("db_user", "DEV_TOOL"),
+        #     password=config.get("db_password", "DEV_TOOL"),
+        #     dsn=dsn
+        # )
 
     def close(self):
         if self.conn:
