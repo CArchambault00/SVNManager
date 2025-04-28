@@ -128,8 +128,10 @@ def setup_gui():
     global root
     root = TkinterDnD.Tk()  # Initialize TkinterDnD root window
     #root.iconbitmap("SVNManagerIcon.ico")
+    
     root.title("SVN Manager")
     root.geometry("900x600")
+
     #Add to check for the latest version
     check_latest_version(root)
 
