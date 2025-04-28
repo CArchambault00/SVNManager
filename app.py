@@ -7,9 +7,10 @@ from create_component import create_patches_treeview, create_file_listbox, creat
 from create_buttons import create_button_frame, create_button_frame_patch, create_button_frame_modify_patch, create_button_frame_patches
 from config import load_config, get_unset_var
 from native_topbar import initialize_native_topbar
+import subprocess
 import urllib.request
-
-APP_VERSION = "1.0.0"
+import random
+import sys
 
 def create_main_layout(root):
     root.grid_rowconfigure(1, weight=1)
@@ -97,17 +98,28 @@ def switch_to_modify_patch_menu(patch_details):
     if neededVar:
         messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
 
+def get_app_version():
+    try:
+        version = subprocess.check_output(["git", "describe", "--tags"], stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        version = "v0.0.0"
+    return version
+
+APP_VERSION = get_app_version()
+
+def export_latest_version():
+    with open("latest_version.txt", "w") as f:
+        f.write(APP_VERSION)
+
 def check_latest_version(root):
     try:
-        # Put your real GitHub link to the latest_version.txt RAW file here
-        url = "https://raw.githubusercontent.com/CArchambault00/SVNManager/main/latest_version.txt"
+        random_number = random.randint(1, 1000000)
+        url = f"https://raw.githubusercontent.com/CArchambault00/SVNManager/main/latest_version.txt?nocache={random_number}"
         response = urllib.request.urlopen(url)
         latest_version = response.read().decode("utf-8").strip()
-
         if latest_version != APP_VERSION:
-            from tkinter import messagebox
             messagebox.showwarning("Update Available", f"A new version ({latest_version}) is available.\nYou are running version {APP_VERSION}.")
-            root.exit()
+            sys.exit(0)
     except Exception as e:
         # Optional: silent fail or notify user
         print(f"Failed to check for latest version: {e}")
