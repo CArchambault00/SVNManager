@@ -55,33 +55,33 @@ def set_username(config_menu, menu_bar):
         update_menu_labels(config_menu, menu_bar, 0, "Username ❌", get_unset_var())
 
 
-def validate_instant_client(path):
-    """Validation function for Instant Client folder."""
-    required_files = ["oci.dll"]
-    return all(os.path.exists(os.path.join(path, file)) for file in required_files)
+# def validate_instant_client(path):
+#     """Validation function for Instant Client folder."""
+#     required_files = ["oci.dll"]
+#     return all(os.path.exists(os.path.join(path, file)) for file in required_files)
 
 
-def set_instantclient(config_menu, menu_bar):
-    config = load_config()
-    instant_client = config.get("instant_client", "")
+# def set_instantclient(config_menu, menu_bar):
+#     config = load_config()
+#     instant_client = config.get("instant_client", "")
 
-    if instant_client:
-        show_messagebox("info", "Info", f"Instant Client path set to: {instant_client}")
-        if not messagebox.askyesno("Change Instant Client Path", "Do you want to change the Instant Client path?"):
-            return
+#     if instant_client:
+#         show_messagebox("info", "Info", f"Instant Client path set to: {instant_client}")
+#         if not messagebox.askyesno("Change Instant Client Path", "Do you want to change the Instant Client path?"):
+#             return
 
-    def success_callback(path):
-        config["instant_client"] = path
-        save_config(config)
-        unset_var = get_unset_var()
-        update_menu_labels(config_menu, menu_bar, 1, "Instant client ✔️", unset_var)
-        show_messagebox("info", "Info", "Instant Client path changed successfully!")
+#     def success_callback(path):
+#         config["instant_client"] = path
+#         save_config(config)
+#         unset_var = get_unset_var()
+#         update_menu_labels(config_menu, menu_bar, 1, "Instant client ✔️", unset_var)
+#         show_messagebox("info", "Info", "Instant Client path changed successfully!")
 
-    if not handle_path_selection(
-        "Select INSTANT_CLIENT Folder", validate_instant_client, success_callback,
-        "The selected folder is not a valid Instant Client 12.1.0 folder"
-    ):
-        show_messagebox("warning", "Warning", "Instant Client path not changed.")
+#     if not handle_path_selection(
+#         "Select INSTANT_CLIENT Folder", validate_instant_client, success_callback,
+#         "The selected folder is not a valid Instant Client 12.1.0 folder"
+#     ):
+#         show_messagebox("warning", "Warning", "Instant Client path not changed.")
 
 
 def validate_svn_folder(path):

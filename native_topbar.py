@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from config import load_config, get_unset_var
-from dialog import set_username, set_instantclient, set_svn_folder
+from dialog import set_username, set_svn_folder #, set_instantclient
 
 def initialize_native_topbar(root):
 # Create the menu bar
@@ -22,10 +22,10 @@ def initialize_native_topbar(root):
         command=lambda: set_username(config_menu, menu_bar)
     )
    
-    config_menu.add_command(
-        label="Instant client ❌" if "instant_client" in unset_var else "Instant client ✔️",
-        command=lambda: set_instantclient(config_menu, menu_bar)
-    )
+    # config_menu.add_command(
+    #     label="Instant client ❌" if "instant_client" in unset_var else "Instant client ✔️",
+    #     command=lambda: set_instantclient(config_menu, menu_bar)
+    # )
     
     config_menu.add_command(
         label="SVN folder ❌" if "svn_path" in unset_var else "SVN folder ✔️",
