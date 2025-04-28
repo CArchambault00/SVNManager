@@ -130,7 +130,7 @@ def setup_gui():
     #root.iconbitmap("SVNManagerIcon.ico")
     root.title("SVN Manager")
     root.geometry("900x600")
-
+    #Add to check for the latest version
     check_latest_version(root)
 
     initialize_native_topbar(root)
