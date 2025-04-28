@@ -12,6 +12,9 @@ import urllib.request
 import random
 import sys
 
+
+APP_VERSION = "1.0.0"
+
 def create_main_layout(root):
     root.grid_rowconfigure(1, weight=1)
 
@@ -98,19 +101,6 @@ def switch_to_modify_patch_menu(patch_details):
     if neededVar:
         messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
 
-def get_app_version():
-    try:
-        version = subprocess.check_output(["git", "describe", "--tags"], stderr=subprocess.DEVNULL).decode().strip()
-    except Exception:
-        version = "v0.0.0"
-    return version
-
-APP_VERSION = get_app_version()
-
-def export_latest_version():
-    with open("latest_version.txt", "w") as f:
-        f.write(APP_VERSION)
-
 def check_latest_version(root):
     try:
         random_number = random.randint(1, 1000000)
@@ -128,7 +118,7 @@ def setup_gui():
     global root
     root = TkinterDnD.Tk()  # Initialize TkinterDnD root window
     #root.iconbitmap("SVNManagerIcon.ico")
-    
+
     root.title("SVN Manager")
     root.geometry("900x600")
 
