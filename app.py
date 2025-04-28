@@ -7,7 +7,9 @@ from create_component import create_patches_treeview, create_file_listbox, creat
 from create_buttons import create_button_frame, create_button_frame_patch, create_button_frame_modify_patch, create_button_frame_patches
 from config import load_config, get_unset_var
 from native_topbar import initialize_native_topbar
+import urllib.request
 
+APP_VERSION = "1.0.0"
 
 def create_main_layout(root):
     root.grid_rowconfigure(1, weight=1)
@@ -95,6 +97,20 @@ def switch_to_modify_patch_menu(patch_details):
     if neededVar:
         messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
 
+def check_latest_version(root):
+    try:
+        # Put your real GitHub link to the latest_version.txt RAW file here
+        url = "https://raw.githubusercontent.com/CArchambault00/SVNManager/main/latest_version.txt"
+        response = urllib.request.urlopen(url)
+        latest_version = response.read().decode("utf-8").strip()
+
+        if latest_version != APP_VERSION:
+            from tkinter import messagebox
+            messagebox.showwarning("Update Available", f"A new version ({latest_version}) is available.\nYou are running version {APP_VERSION}.")
+            root.exit()
+    except Exception as e:
+        # Optional: silent fail or notify user
+        print(f"Failed to check for latest version: {e}")
 
 def setup_gui():
     global root
@@ -103,8 +119,9 @@ def setup_gui():
     root.title("SVN Manager")
     root.geometry("900x600")
 
-    initialize_native_topbar(root)
+    check_latest_version(root)
 
+    initialize_native_topbar(root)
     # Switch to the initial menu
     switch_to_lock_unlock_menu()
     
