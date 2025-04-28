@@ -6,6 +6,7 @@ from patch_generation import generate_patch
 from buttons_function import insert_next_version, modify_patch, build_existing_patch
 from patches_operations import refresh_patches, update_patch
 from config import load_config
+from db_handler import dbClass
 
 def create_button_frame(parent, files_listbox):
     tk.Button(parent, text="Refresh lock files", command=lambda: refresh_locked_files(files_listbox), background="#80DDFF", width=15).pack(side="top", pady=20)
@@ -25,7 +26,10 @@ def create_button_frame_patch(parent, files_listbox):
     patch_version_label.pack(side="left", padx=5)
 
     # Dropdown for patch letter
-    patch_version_letter = ttk.Combobox(patch_version_frame, values=["J", "S", "V", "W"], width=3)
+    db = dbClass()
+    prefixes = db.get_prefix_list()
+
+    patch_version_letter = ttk.Combobox(patch_version_frame, values=prefixes, width=3)
     patch_version_letter.set("S")  # default value
     patch_version_letter.pack(side="left", padx=5)
 
@@ -54,7 +58,10 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     patch_version_label = tk.Label(patch_version_frame, text="Patch Version:")
     patch_version_label.pack(side="left", padx=5)
 
-    patch_version_letter = ttk.Combobox(patch_version_frame, values=["J", "S", "V", "W"], width=3)
+    db = dbClass()
+    prefixes = db.get_prefix_list()
+
+    patch_version_letter = ttk.Combobox(patch_version_frame, values=prefixes, width=3)
     patch_letter = patch_details['NAME'][0]  # Extract the letter from the selected patch's version
     patch_version_letter.set(patch_letter)  # Set to the selected patch's version
     patch_version_letter.pack(side="left", padx=5)
@@ -82,7 +89,10 @@ def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_
     patch_version_frame = tk.Frame(parent)
     patch_version_frame.pack(side="top", pady=5)
 
-    patch_version_letter = ttk.Combobox(patch_version_frame, values=["J", "S", "V", "W"], width=3)
+    db = dbClass()
+    prefixes = db.get_prefix_list()
+
+    patch_version_letter = ttk.Combobox(patch_version_frame, values=prefixes, width=3)
     patch_version_letter.set("S")  # default value
     patch_version_letter.pack(side="left", padx=5)
     username = config.get("username")

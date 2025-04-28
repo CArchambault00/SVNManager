@@ -3,6 +3,7 @@ from tkinter import messagebox
 import shutil
 import os
 from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision
+from db_handler import dbClass
 
 def get_md5_checksum(file_path):
     """Returns the MD5 checksum of a given file."""
@@ -57,41 +58,20 @@ def extract_build_number(patch_name):
     Replicates the ExtractBuildNumber function from VB6 code.
     Converts patch names like "J2.1.1234" to "'CORE',2,1,1234"
     """
+    db = dbClass()
+    
     if not patch_name:
-        return "'ERROR',3,0,0"
+        return "'ERROR',0,0,0"
     
     # Remove any suffix after hyphen
     if '-' in patch_name:
         patch_name = patch_name.split('-')[0]
     
-    parts = patch_name.split('.')
-    
     # Determine application code
-    first_char = patch_name[0].upper()
+    prefix = patch_name[0].upper()
+    application_id = db.get_application_id(prefix)
+    version_part = patch_name[1:]
 
-    if first_char == 'V':
-        app_code = 'BT'
-        version_part = patch_name[1:]
-    elif first_char in ['J', 'C']:
-        app_code = 'CORE'
-        version_part = patch_name[1:]
-    elif first_char == 'S':
-        app_code = 'CORE_SVN'
-        version_part = patch_name[1:]
-    elif first_char == 'E':
-        app_code = 'EXT'
-        version_part = patch_name[1:]
-    elif first_char == 'D':
-        app_code = 'DIE'
-        version_part = patch_name[1:]
-    else:
-        if patch_name[0].isdigit():
-            app_code = 'CORE'
-            version_part = patch_name
-        else:
-            app_code = patch_name
-            version_part = '3'
-    
     # Split version components
     version_parts = version_part.split('.')
     
@@ -115,7 +95,7 @@ def extract_build_number(patch_name):
     if revision and not revision[-1].isdigit():
         revision = revision[:-1]
     
-    return f"'{app_code}',{major},{minor},{revision}"
+    return f"'{application_id}',{major},{minor},{revision}"
 
 def write_sql_commands(sql_file, file_path, schema):
     """Write SQL commands to execute a script file."""
@@ -176,7 +156,7 @@ def create_readme_file(patch_version_folder, patch_name, username, creation_date
             else:
                 readme.write(f"{file} ({get_file_revision(file)})\n")
 
-def create_main_sql_file(patch_version_folder, files, patch_name=None, svn_path=None, version_info=None):
+def create_main_sql_file(patch_version_folder, files, patch_name=None, version_info=None, application_id=None):
     """Create MainSQL.sql file with SQL commands."""
     with open(os.path.join(patch_version_folder, "MainSQL.sql"), "w") as main_sql:
         main_sql.write("prompt &&HOST\n")
@@ -199,11 +179,11 @@ def create_main_sql_file(patch_version_folder, files, patch_name=None, svn_path=
         
         if version_info:
             major, minor, revision = version_info
-            main_sql.write(f"CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION('CORE_SVN',{major},{minor},{revision},'&&PERSON');\n")
+            main_sql.write(f"CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION('{application_id}',{major},{minor},{revision},'&&PERSON');\n")
         elif patch_name:
             version = extract_build_number(patch_name)
-            major, minor, revision = version.split(",")[1:]
-            main_sql.write(f"CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION('CORE_SVN',{major},{minor},{revision},'&&PERSON');\n")
+            application_id, major, minor, revision = version.split(",") # Application_id is already in the format 'APP_ID'
+            main_sql.write(f"CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION({application_id},{major},{minor},{revision},'&&PERSON');\n")
         
         main_sql.write("commit;\n\nexit;\n")
 

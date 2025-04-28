@@ -15,6 +15,8 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
     svn_path = config.get("svn_path")
     username = config.get("username")
     
+    patch_name = patch_letter + patch_version
+    patch_version_folder = os.path.join(PATCH_DIR, patch_name)
     try:
         if not patch_version:
             messagebox.showerror("Error", "Patch version is required!")
@@ -31,9 +33,8 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
         patch_id = db.create_patch_header(patch_letter, patch_version, patch_description, username, 
                                         False, vo.major, vo.minor, vo.revision)
         
-        patch_name = patch_letter + patch_version
-        patch_version_folder = os.path.join(PATCH_DIR, patch_name)
         os.makedirs(patch_version_folder, exist_ok=True)
+        application_id = db.get_application_id(patch_letter)
         
         for file in selected_files:
             fake_path = '$/Projects/SVN/' + file
@@ -43,13 +44,10 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
             db.set_md5(patch_id, file_id, md5checksum)
             create_patch_files(file, svn_path, patch_version_folder)
         
-       
-        
         create_readme_file(patch_version_folder, patch_name, username, 
                          time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)
         
-        create_main_sql_file(patch_version_folder, selected_files, svn_path=svn_path, 
-                            version_info=(vo.major, vo.minor, vo.revision))
+        create_main_sql_file(patch_version_folder, selected_files, version_info=(vo.major, vo.minor, vo.revision), application_id=application_id)
         
             
         setup_patch_folder(patch_version_folder)

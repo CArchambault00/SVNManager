@@ -54,7 +54,6 @@ class dbClass:
     def execute_non_query(self, sql: str, params: Optional[Dict] = None):
         cursor = self.conn.cursor()
         cursor.execute(sql, params or {})
-        self.conn.commit()
         cursor.close()
 
     def get_folder_list(self):
@@ -127,7 +126,7 @@ class dbClass:
             'comments': patch_desc,
             'temp_yn': 'Y' if personal else 'N',
             'user_id': username,
-            'application_id': self.get_module_id(patch_letter),
+            'application_id': self.get_application_id(patch_letter),
             'major': major,
             'minor': minor,
             'revision': revision
@@ -160,7 +159,7 @@ class dbClass:
         self.execute_non_query(sql, {'patch_id': patch_id, 'file_id': file_id, 'version': version})
         return file_id
     
-    def get_patch_list(self, temp_yn: bool, module: str):
+    def get_patch_list(self, temp_yn: bool, application_id: str):
         sql = """
         SELECT H.PATCH_ID, H.NAME, H.COMMENTS, DECODE(D.PATCH_ID, NULL, 0, COUNT(*)) AS PATCH_SIZE, H.USER_ID, H.CREATION_DATE,
         CHECKLIST_COUNT(H.PATCH_ID) AS CHECK_LIST_COUNT
@@ -169,7 +168,7 @@ class dbClass:
         AND DELETED_YN = 'N'
         """
         sql += f"AND TEMP_YN = '{'Y' if temp_yn else 'N'}'"
-        sql += f"AND APPLICATION_ID = '{self.get_module_id(module)}'"
+        sql += f"AND APPLICATION_ID = '{self.get_application_id(application_id)}'"
 
         sql += """
         GROUP BY H.PATCH_ID, D.PATCH_ID, H.NAME, H.COMMENTS, H.USER_ID, H.CREATION_DATE
@@ -211,17 +210,17 @@ class dbClass:
         sql = "UPDATE PATCH_HEADER SET NAME = :new_name WHERE PATCH_ID = :patch_id"
         self.execute_non_query(sql, {'new_name': new_name, 'patch_id': patch_id})
 
-    def get_module_id(self, module: str) -> str:
-        if module == "V":
-            return "BT"
-        elif module == "S":
-            return "CORE_SVN"
+    def get_application_id(self, application_id: str) -> str:
+        sql = f"SELECT APPLICATION_ID FROM MODULE WHERE PREFIX = '{application_id}'"
+        result = self.execute_query(sql)
+        if result:
+            return str(result[0]['APPLICATION_ID']).strip()
         else:
-            return "CORE"
+            raise ValueError(f"Application ID '{application_id}' not found in the database.")
 
-    def get_max_version(self, module: str):
-        module_id = self.get_module_id(module)
-        sql = f"SELECT MAJOR, MINOR FROM CURRENT_VERSION WHERE APPLICATION_ID = '{module_id}'"
+    def get_max_version(self, application_id: str):
+        application_id = self.get_application_id(application_id)
+        sql = f"SELECT MAJOR, MINOR FROM CURRENT_VERSION WHERE APPLICATION_ID = '{application_id}'"
         result = self.execute_query(sql)
         major, minor = (result[0]['MAJOR'], result[0]['MINOR']) if result else (1, 0)
         sql = f"""
@@ -229,7 +228,7 @@ class dbClass:
         FROM PATCH_HEADER
         WHERE DELETED_YN = 'N' AND TEMP_YN = 'N'
         AND MAJOR = :major AND MINOR = :minor
-        AND APPLICATION_ID = '{module_id}'
+        AND APPLICATION_ID = '{application_id}'
         """
         return self.execute_query(sql, {'major': major, 'minor': minor})
 
@@ -302,9 +301,10 @@ class dbClass:
         sql = "SELECT ITEM_ID, DISPLAY_ORDER, FILE_TYPE, ITEM_DESC, CONTENT_TYPE FROM CHECKLIST"
         return self.execute_query(sql)
 
-    def get_module_list(self):
-        sql = "SELECT DISTINCT DEFAULT_PREFIX FROM FOLDER ORDER BY 1"
-        return self.execute_query(sql)
+    def get_prefix_list(self):
+        sql = "SELECT PREFIX FROM MODULE"
+        list = self.execute_query(sql)
+        return [item['PREFIX'] for item in list]
 
     def __del__(self):
         self.close()

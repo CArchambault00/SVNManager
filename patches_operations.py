@@ -14,7 +14,7 @@ patch_info_dict = {}
 
 selected_patch = None
 
-def refresh_patches(treeview, temp, module, username):
+def refresh_patches(treeview, temp, application_id, username):
     """
     Refresh the patches displayed in the Treeview.
     """
@@ -28,7 +28,7 @@ def refresh_patches(treeview, temp, module, username):
     patch_info_dict.clear()
     
     # Fetch patches from the database
-    patches = db.get_patch_list(temp, module)
+    patches = db.get_patch_list(temp, application_id)
     # Insert patches into the Treeview
     for patch in patches:
 
@@ -43,7 +43,7 @@ def refresh_patches(treeview, temp, module, username):
             patch["CHECK_LIST_COUNT"]
         ))
 
-def refresh_patches_dict(temp, module):
+def refresh_patches_dict(temp, application_id):
     """
     Refresh the patches displayed in the Treeview.
     """
@@ -53,7 +53,7 @@ def refresh_patches_dict(temp, module):
     patch_info_dict.clear()
     
     # Fetch patches from the database
-    patches = db.get_patch_list(temp, module)
+    patches = db.get_patch_list(temp, application_id)
     # Insert patches into the Treeview
     for patch in patches:
         patch_info_dict[patch["NAME"]] = patch
@@ -74,6 +74,8 @@ def get_selected_patch():
     return selected_patch
 
 def build_patch(patch_info):
+    patch_version_folder = os.path.join(PATCH_DIR, patch_info["NAME"])
+    os.makedirs(patch_version_folder, exist_ok=True)
     try:
         db = dbClass()
         config = load_config()
@@ -82,8 +84,7 @@ def build_patch(patch_info):
         patch_id = patch_info["PATCH_ID"]
         files = db.get_patch_file_list(patch_id)
         
-        patch_version_folder = os.path.join(PATCH_DIR, patch_info["NAME"])
-        os.makedirs(patch_version_folder, exist_ok=True)
+        
         
         for file in files:
             if file["FOLDER_TYPE"] == '1':
@@ -147,6 +148,8 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
     svn_path = config.get("svn_path")
     username = config.get("username")
     
+    patch_name = patch_version_letter + patch_version_entry
+    patch_version_folder = os.path.join(PATCH_DIR, patch_name)
     try:
         if not selected_files or len(selected_files) == 0:
             if not messagebox.askyesno("No Files Selected", 
@@ -159,9 +162,7 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
         db.conn.begin()
         db.update_patch_header(patch_id, patch_version_letter, patch_version_entry, patch_description)
         db.delete_patch_detail(patch_id)
-
-        patch_name = patch_version_letter + patch_version_entry
-        patch_version_folder = os.path.join(PATCH_DIR, patch_name)
+        
         os.makedirs(patch_version_folder, exist_ok=True)
         
         for file in selected_files:
@@ -175,7 +176,7 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
         create_readme_file(patch_version_folder, patch_name, username, 
                          time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)
         
-        create_main_sql_file(patch_version_folder, selected_files, svn_path=svn_path, 
+        create_main_sql_file(patch_version_folder, selected_files,
                            patch_name=patch_name)
         
         

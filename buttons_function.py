@@ -16,8 +16,8 @@ def unlock_selected_files(files_listbox):
     selected_files = [files_listbox.item(item, "values")[2] for item in files_listbox.selection()]
     unlock_files(selected_files, files_listbox)
 
-def insert_next_version(module, patch_version_entry):
-    new_version = next_version(module)
+def insert_next_version(application_id, patch_version_entry):
+    new_version = next_version(application_id)
     if new_version:
         patch_version_entry.config(state="normal")
         patch_version_entry.delete(0, tk.END)

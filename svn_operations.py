@@ -5,9 +5,6 @@ from config import load_config
 import xml.etree.ElementTree as ET
 import os
 
-TORTOISE_SVN = r"C:\Program Files\TortoiseSVN\bin\TortoiseProc.exe"
-
-
 def load_user_locked_files():
     config = load_config()
     username = config.get("username")
@@ -72,22 +69,34 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True):
     config = load_config()
     username = config.get("username")
     svn_path = config.get("svn_path")
-    command = "lock" if lock else "unlock"
     
-    # Ensure lock message is properly formatted
-    lock_message = f"Locking by {username}" if lock else f"Unlocking by {username}"
-    
-    # Ensure selected files are correctly formatted in the command
-    files_str = '*'.join(selected_files)
-    
-    # Prepare the command arguments
-    args = [
-        TORTOISE_SVN, f"/command:{command}",
-        f"/path:{files_str}", "/closeonend:1", f"/lockmessage:{lock_message}"
-    ]
-    
-    # Run the subprocess command
-    subprocess.run(args, cwd=svn_path, shell=True)
+    if not selected_files:
+        messagebox.showerror("Error", "No files selected to lock/unlock!")
+        return
+
+    # Decide SVN command and lock message
+    if lock:
+        command = "lock"
+        lock_message = f"Locking by {username}"
+    else:
+        command = "unlock"
+
+    # Prepare the command
+    base_command = ["svn", command]
+
+    if lock:
+        base_command += ["--message", lock_message]
+
+    # Add all files
+    base_command += selected_files
+
+    # Run the svn lock/unlock command
+    result = subprocess.run(base_command, cwd=svn_path, capture_output=True, text=True)
+
+    if result.returncode == 0:
+        messagebox.showinfo("Success", f"Files {'locked' if lock else 'unlocked'} successfully!")
+    else:
+        messagebox.showerror("SVN Error", result.stderr)
 
     refresh_locked_files(patch_listbox)
 
@@ -107,10 +116,18 @@ def commit_files(selected_files):
     username = config.get("username")
     svn_path = config.get("svn_path")
     if selected_files:
-        args = [TORTOISE_SVN, "/command:commit", f"/path:{'*'.join(selected_files)}", "/closeonend:1", f"/logmsg:{username}"]
-        subprocess.run(args, shell=True, cwd=svn_path)
-    else: 
-        messagebox.showerror("Error", "No files selected for commit!")
+        args = [
+            "svn", "commit",
+            "--username", username,
+            "--message", f"Committed by {username}",
+            "--no-unlock",
+            *selected_files
+        ]
+
+        result = subprocess.run(args, cwd=svn_path, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            raise Exception(f"SVN commit failed: {result.stderr}")
 
 def get_file_info(file):
     config = load_config()
@@ -189,8 +206,6 @@ def revert_files(selected_files):
 
             if result.returncode != 0:
                 messagebox.showerror("Error", f"Failed to revert file: {file}\n{result.stderr}")
-            else:
-                print(f"Reverted file: {file}")
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred while reverting files: {e}")
 
