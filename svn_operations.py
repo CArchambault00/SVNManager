@@ -16,7 +16,7 @@ def load_user_locked_files():
 
     # Run the SVN command to get the XML status output
     command = ["svn", "status", "--xml"]
-    result = subprocess.run(command, cwd=svn_path, capture_output=True, text=True)
+    result = subprocess.run(command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
    
     if result.returncode != 0:
         messagebox.showerror("Error", "Failed to get SVN status!")
@@ -91,7 +91,7 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True):
     base_command += selected_files
 
     # Run the svn lock/unlock command
-    result = subprocess.run(base_command, cwd=svn_path, capture_output=True, text=True)
+    result = subprocess.run(base_command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
 
     if result.returncode == 0:
         messagebox.showinfo("Success", f"Files {'locked' if lock else 'unlocked'} successfully!")
@@ -124,7 +124,7 @@ def commit_files(selected_files):
             *selected_files
         ]
 
-        result = subprocess.run(args, cwd=svn_path, capture_output=True, text=True)
+        result = subprocess.run(args, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
         
         if result.returncode != 0:
             raise Exception(f"SVN commit failed: {result.stderr}")
@@ -135,7 +135,7 @@ def get_file_info(file):
     svn_path = config.get("svn_path")
 
     args = ["svn", "info", file]
-    result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path)
+    result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
 
     # Extract revision
     revision = ""
@@ -165,7 +165,7 @@ def get_file_revision(file):
     
     # Run the SVN log command to get the latest revision number
     args = ["svn", "log", "-l", "1", file]
-    result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path)
+    result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
     
     # Check if the command was successful
     if result.returncode == 0:
@@ -185,7 +185,7 @@ def get_file_specific_version(file_path, file_folderStruture,file_name,  revisio
         os.makedirs(destination_folder, exist_ok=True)
 
     args = ["svn", "export", f"-r{revision}", file_path, destination_folder]
-    result = subprocess.run(args, capture_output=True, text=True, cwd=config.get("svn_path"))
+    result = subprocess.run(args, capture_output=True, text=True, cwd=config.get("svn_path"), shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
     
 def revert_files(selected_files):
     """
@@ -202,7 +202,7 @@ def revert_files(selected_files):
         for file in selected_files:
             # Run the SVN revert command for each file
             args = ["svn", "revert", file]
-            result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path)
+            result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
 
             if result.returncode != 0:
                 messagebox.showerror("Error", f"Failed to revert file: {file}\n{result.stderr}")
@@ -214,7 +214,7 @@ def copy_InstallConfig(destination):
     config = load_config()
     svn_path = config.get("svn_path")
     try:
-        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Misc Tools/InstallConfig/InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL,)
+        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Misc Tools/InstallConfig/InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
     except subprocess.CalledProcessError as e:
         messagebox.showerror("Error", f"Failed to copy InstallConfig.exe: {e}")
 
@@ -223,7 +223,7 @@ def copy_RunScript(destination):
     config = load_config()
     svn_path = config.get("svn_path")
     try:
-        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Misc Tools/InstallConfig/RunScript.bat", destination], check=True,  stdout=subprocess.DEVNULL,)
+        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Misc Tools/InstallConfig/RunScript.bat", destination], check=True,  stdout=subprocess.DEVNULL, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
     except subprocess.CalledProcessError as e:
         messagebox.showerror("Error", f"Failed to copy RunScript.exe: {e}")
 
