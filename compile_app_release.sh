@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e  # Stop on first error
-
+./bump_version.sh  # Ensure version is bumped before building
 # 2. Read version
 VERSION=$(cat latest_version.txt)
 echo "📦 Building SVNManager version $VERSION"

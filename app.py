@@ -13,7 +13,7 @@ import random
 import sys
 
 
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.3"
 
 def create_main_layout(root):
     root.grid_rowconfigure(1, weight=1)
@@ -105,7 +105,14 @@ def check_latest_version(root):
     try:
         random_number = random.randint(1, 1000000)
         url = f"https://raw.githubusercontent.com/CArchambault00/SVNManager/main/latest_version.txt?nocache={random_number}"
-        response = urllib.request.urlopen(url)
+        response = urllib.request.Request(
+                                            url,
+                                            headers={
+                                                "Cache-Control": "no-cache, no-store, must-revalidate",
+                                                "Pragma": "no-cache",
+                                                "Expires": "0"
+                                            }
+                                        )
         latest_version = response.read().decode("utf-8").strip()
         if latest_version != APP_VERSION:
             messagebox.showwarning("Update Available", f"A new version ({latest_version}) is available.\nYou are running version {APP_VERSION}.")
