@@ -1,5 +1,6 @@
 import os
 import json
+from tkinter import messagebox
 
 CONFIG_FILE = "svn_config.json"
 neededVar = ["svn_path", "username"]   # , "instant_client"
@@ -28,3 +29,8 @@ def get_unset_var():
         if not config.get(var):
             unsetVar.append(var)
     return unsetVar
+
+def verify_config():
+    unsetVar = get_unset_var()
+    if unsetVar:
+        raise ValueError(f"The following variables are not set: {', '.join(unsetVar)}")

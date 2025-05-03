@@ -1,7 +1,7 @@
 # svn_operations.py
 import subprocess
 from tkinter import messagebox
-from config import load_config
+from config import load_config, verify_config
 import xml.etree.ElementTree as ET
 import os
 
@@ -67,32 +67,33 @@ def unlock_files(selected_files, patch_listbox):
     _lock_unlock_files(selected_files, patch_listbox, lock=False)
 
 def _lock_unlock_files(selected_files, patch_listbox, lock=True):
-    config = load_config()
-    username = config.get("username")
-    svn_path = config.get("svn_path")
-    
-    if not selected_files:
-        messagebox.showerror("Error", "No files selected to lock/unlock!")
-        return
-
-    # Decide SVN command and lock message
-    if lock:
-        command = "lock"
-        lock_message = f"Locking by {username}"
-    else:
-        command = "unlock"
-
-    # Prepare the command
-    base_command = ["svn", command]
-
-    if lock:
-        base_command += ["--message", lock_message]
-
-    # Add all files
-    base_command += selected_files
-
-    # Run the svn lock/unlock command
     try:
+        verify_config()
+        config = load_config()
+        username = config.get("username")
+        svn_path = config.get("svn_path")
+        
+        if not selected_files:
+            messagebox.showerror("Error", "No files selected to lock/unlock!")
+            return
+
+        # Decide SVN command and lock message
+        if lock:
+            command = "lock"
+            lock_message = f"Locking by {username}"
+        else:
+            command = "unlock"
+
+        # Prepare the command
+        base_command = ["svn", command]
+
+        if lock:
+            base_command += ["--message", lock_message]
+
+        # Add all files
+        base_command += selected_files
+
+        # Run the svn lock/unlock command
         subprocess.run(base_command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
         messagebox.showinfo("Success", f"Files {'locked' if lock else 'unlocked'} successfully!")
     except Exception as e:

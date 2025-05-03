@@ -6,11 +6,13 @@ import time
 import version_operation as vo
 from db_handler import dbClass
 from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files
-from config import load_config
+from config import load_config, verify_config
 
 PATCH_DIR = "D:/cyframe/jtdev/Patches/Current"
 def generate_patch(selected_files, patch_letter, patch_version, patch_description):
     db = dbClass()
+    
+    verify_config()
     config = load_config()
     svn_path = config.get("svn_path")
     username = config.get("username")

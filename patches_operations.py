@@ -3,7 +3,7 @@ from db_handler import dbClass
 from svn_operations import get_file_specific_version, get_file_info, commit_files, revert_files, get_file_revision, copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig
 from patch_generation import PATCH_DIR
 import os
-from config import load_config
+from config import load_config, verify_config
 from patch_generation import create_patch_files
 import tkinter as tk
 import time
@@ -78,6 +78,7 @@ def build_patch(patch_info):
     os.makedirs(patch_version_folder, exist_ok=True)
     try:
         db = dbClass()
+        verify_config()
         config = load_config()
         svn_path = config.get("svn_path")
         
@@ -143,6 +144,7 @@ def refresh_patch_files(treeview, patch_info):
 
 def update_patch(selected_files, patch_id, patch_version_letter, patch_version_entry, 
                 patch_description, switch_to_modify_patch_menu):
+    verify_config()
     db = dbClass()
     config = load_config()
     svn_path = config.get("svn_path")
