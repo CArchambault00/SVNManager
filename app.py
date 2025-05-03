@@ -11,7 +11,7 @@ import urllib.request
 import random
 import sys
 import os
-import json
+import webbrowser
 
 APP_VERSION = "1.0.6"
 
@@ -100,59 +100,34 @@ def switch_to_modify_patch_menu(patch_details):
     neededVar = get_unset_var()
     if neededVar:
         messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
-
 def check_latest_version(root):
     random_number = random.randint(1, 1000000)
     url = f"https://raw.githubusercontent.com/CArchambault00/SVNManager/main/latest_version.txt?nocache={random_number}"
 
-    # Crée la requête avec les bons headers
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0"
-        }
-    )
-
     try:
-        # Envoie la requête et lit la réponse
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "User-Agent": "SVNManager"
+            }
+        )
+
         with urllib.request.urlopen(req) as response:
             latest_version = response.read().decode("utf-8").strip()
-        
+
         if latest_version != APP_VERSION:
-            messagebox.showwarning(
-                "Update Available",
-                f"A new version ({latest_version}) is available.\nYou are running version {APP_VERSION}."
-            )
-            # Do you want to update?
-            if messagebox.askyesno("Update", "Do you want to update now?"):
-                # Get latest tag from GitHub
-                tag_url = "https://api.github.com/repos/CArchambault00/SVNManager/tags"
-                req = urllib.request.Request(
-                    tag_url,
-                    headers={
-                        "Accept": "application/vnd.github.v3+json",
-                        "User-Agent": "SVNManager"
-                    }
-                )
-                with urllib.request.urlopen(req) as response:
-                    tags = response.read().decode("utf-8")
-                    tags = json.loads(tags)
-                    latest_tag = tags[0]["name"]
-                    download_url = f"https://github.com/CArchambault00/SVNManager/releases/tag/{latest_tag}"
-                    messagebox.showinfo(
-                        "Update Available",
-                        f"A new version ({latest_tag}) is available.\nYou are running version {APP_VERSION}.\n\nDownload it here: {download_url}"
-                    )
+            if messagebox.askyesno("Update Available", f"A new version ({latest_version}) is available.\nDo you want to open the download page?"):
+                release_url = f"https://github.com/CArchambault00/SVNManager/releases/tag/{latest_version}"
+                webbrowser.open(release_url)
         else:
             print("You are using the latest version.")
-    except Exception as e:
-        print(f"Failed to check for latest version: {e}")
-        messagebox.showerror("Error", f"Failed to check for latest version: {e}")
 
     except Exception as e:
         print(f"Failed to check for latest version: {e}")
+        messagebox.showerror("Error", f"Failed to check for latest version:\n{e}")
 
 def setup_gui():
     global root
