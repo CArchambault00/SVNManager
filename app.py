@@ -13,7 +13,7 @@ import sys
 import os
 import webbrowser
 
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 
 def create_main_layout(root):
     root.grid_rowconfigure(1, weight=1)
