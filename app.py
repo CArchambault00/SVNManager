@@ -11,7 +11,7 @@ import urllib.request
 import random
 import sys
 import os
-
+import json
 
 APP_VERSION = "1.0.6"
 
@@ -125,7 +125,31 @@ def check_latest_version(root):
                 "Update Available",
                 f"A new version ({latest_version}) is available.\nYou are running version {APP_VERSION}."
             )
-            sys.exit(0)
+            # Do you want to update?
+            if messagebox.askyesno("Update", "Do you want to update now?"):
+                # Get latest tag from GitHub
+                tag_url = "https://api.github.com/repos/CArchambault00/SVNManager/tags"
+                req = urllib.request.Request(
+                    tag_url,
+                    headers={
+                        "Accept": "application/vnd.github.v3+json",
+                        "User-Agent": "SVNManager"
+                    }
+                )
+                with urllib.request.urlopen(req) as response:
+                    tags = response.read().decode("utf-8")
+                    tags = json.loads(tags)
+                    latest_tag = tags[0]["name"]
+                    download_url = f"https://github.com/CArchambault00/SVNManager/releases/tag/{latest_tag}"
+                    messagebox.showinfo(
+                        "Update Available",
+                        f"A new version ({latest_tag}) is available.\nYou are running version {APP_VERSION}.\n\nDownload it here: {download_url}"
+                    )
+        else:
+            print("You are using the latest version.")
+    except Exception as e:
+        print(f"Failed to check for latest version: {e}")
+        messagebox.showerror("Error", f"Failed to check for latest version: {e}")
 
     except Exception as e:
         print(f"Failed to check for latest version: {e}")
