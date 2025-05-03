@@ -2,6 +2,9 @@
 
 set -e  # Stop on first error
 ./bump_version.sh  # Ensure version is bumped before building
+git add latest_version.txt version_info.txt app.py
+git commit -m "Bump version to $(cat latest_version.txt)"
+git push origin main
 # 2. Read version
 VERSION=$(cat latest_version.txt)
 echo "📦 Building SVNManager version $VERSION"
