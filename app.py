@@ -13,7 +13,7 @@ import random
 import sys
 
 
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.0.5"
 
 def create_main_layout(root):
     root.grid_rowconfigure(1, weight=1)
