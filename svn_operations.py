@@ -15,8 +15,8 @@ def load_user_locked_files():
         return []
 
     # Run the SVN command to get the XML status output
-    command = f'svn status --xml {svn_path}'
-    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    command = ["svn", "status", "--xml"]
+    result = subprocess.run(command, cwd=svn_path, capture_output=True, text=True)
    
     if result.returncode != 0:
         messagebox.showerror("Error", "Failed to get SVN status!")
@@ -107,7 +107,7 @@ def refresh_locked_files(files_listbox):
         svn_path = svn_path.replace("\\", "/")
         files_listbox.delete(*files_listbox.get_children())
         for file in load_user_locked_files():
-            file_name = file.split(svn_path + "/")[1]
+            file_name = file
             lock_by_user, lock_owner, revision = get_file_info(file)
             files_listbox.insert("", "end", values=("locked",revision, file_name), tags=("unchecked",))
 
