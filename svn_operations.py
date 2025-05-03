@@ -14,16 +14,16 @@ def load_user_locked_files():
         messagebox.showwarning("Warning", "Invalid SVN path!")
         return []
 
-    # Run the SVN command to get the XML status output
-    command = ["svn", "status", "--xml"]
-    result = subprocess.run(command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
-   
-    if result.returncode != 0:
-        messagebox.showerror("Error", "Failed to get SVN status!")
+    result = None
+    try :
+        command = ["svn", "status", "--xml"]
+        result = subprocess.run(command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to run SVN status command\nError might be cause by missing SVN command line tool\n\n {e}")
         return []
-
-    locked_files = []
+   
     try:
+        locked_files = []
         root = ET.fromstring(result.stdout)
 
         # Iterate through all <entry> elements in the XML
@@ -51,12 +51,13 @@ def load_user_locked_files():
                     lock_owner = lock.find("owner").text
                     if lock_owner == username:
                         locked_files.append(file_path)
-
+        return locked_files
     except ET.ParseError as e:
         messagebox.showerror("Error", f"Failed to parse SVN status XML: {e}")
         return []
-
-    return locked_files
+    except Exception as e:
+        messagebox.showerror("Error", f"An error occurred while processing SVN status: {e}")
+        return []
 
 
 def lock_files(selected_files, patch_listbox):
@@ -91,12 +92,11 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True):
     base_command += selected_files
 
     # Run the svn lock/unlock command
-    result = subprocess.run(base_command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
-
-    if result.returncode == 0:
+    try:
+        subprocess.run(base_command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
         messagebox.showinfo("Success", f"Files {'locked' if lock else 'unlocked'} successfully!")
-    else:
-        messagebox.showerror("SVN Error", result.stderr)
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to locked files\nError might be cause by missing SVN command line tool\n\n {e}")
 
     refresh_locked_files(patch_listbox)
 
@@ -123,11 +123,10 @@ def commit_files(selected_files):
             "--no-unlock",
             *selected_files
         ]
-
-        result = subprocess.run(args, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
-        
-        if result.returncode != 0:
-            raise Exception(f"SVN commit failed: {result.stderr}")
+        try:
+            subprocess.run(args, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+        except Exception as e:
+            raise Exception(f"Failed to commit files\nError might be cause by missing SVN command line tool\n\n {e}")
 
 def get_file_info(file):
     config = load_config()
@@ -135,47 +134,48 @@ def get_file_info(file):
     svn_path = config.get("svn_path")
 
     args = ["svn", "info", file]
-    result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+    try:
+        result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+        # Extract revision  
+        revision = ""
+        if "Revision: " in result.stdout:
+            try:
+                revision = result.stdout.split("Revision: ")[1].split("\n")[0].strip()
+            except IndexError:
+                revision = ""
 
-    # Extract revision
-    revision = ""
-    if "Revision: " in result.stdout:
-        try:
-            revision = result.stdout.split("Revision: ")[1].split("\n")[0].strip()
-        except IndexError:
-            revision = ""
+        # Extract lock owner
+        lock_owner = ""
+        if "Lock Owner: " in result.stdout:
+            try:
+                lock_owner = result.stdout.split("Lock Owner: ")[1].split("\n")[0].strip()
+            except IndexError:
+                lock_owner = ""
 
-    # Extract lock owner
-    lock_owner = ""
-    if "Lock Owner: " in result.stdout:
-        try:
-            lock_owner = result.stdout.split("Lock Owner: ")[1].split("\n")[0].strip()
-        except IndexError:
-            lock_owner = ""
+        # Determine if the lock is by the current user
+        is_lock_by_user = lock_owner == username
 
-    # Determine if the lock is by the current user
-    is_lock_by_user = lock_owner == username
-
-    # Always return a tuple (is_lock_by_user, lock_owner, revision)
-    return (is_lock_by_user, lock_owner, revision)
+        # Always return a tuple (is_lock_by_user, lock_owner, revision)
+        return (is_lock_by_user, lock_owner, revision)
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to get {file} info from SVN\nError might be cause by missing SVN command line tool\n\n {e}")
+        return (False, "", "")
 
 def get_file_revision(file):
     config = load_config()
     svn_path = config.get("svn_path")
     
     # Run the SVN log command to get the latest revision number
-    args = ["svn", "log", "-l", "1", file]
-    result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
-    
-    # Check if the command was successful
-    if result.returncode == 0:
-        # Extract the revision number from the output
+    try:
+        args = ["svn", "log", "-l", "1", file]
+        result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
         log_output = result.stdout
         revision_line = log_output.splitlines()[1]  # The second line contains the revision info
         revision_number = revision_line.split()[0].strip('r')
         return revision_number
-    else:
-        messagebox.showerror("Error", "Failed to get file revision! For file: " + file)
+    except Exception as e:
+        raise Exception(f"Failed to get file revision! For file: {file}\nError might be cause by missing SVN command line tool\n\n {e}")
+    
 
 def get_file_specific_version(file_path, file_folderStruture,file_name,  revision, destination):
     config = load_config()
@@ -183,9 +183,11 @@ def get_file_specific_version(file_path, file_folderStruture,file_name,  revisio
     destination_folder = destination + destination_folder
     if not os.path.isdir(destination_folder):
         os.makedirs(destination_folder, exist_ok=True)
-
-    args = ["svn", "export", f"-r{revision}", file_path, destination_folder]
-    result = subprocess.run(args, capture_output=True, text=True, cwd=config.get("svn_path"), shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+    try:
+        args = ["svn", "export", f"-r{revision}", file_path, destination_folder]
+        subprocess.run(args, capture_output=True, text=True, cwd=config.get("svn_path"), shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+    except Exception as e:
+        raise Exception(f"Failed to export {file_path} from SVN\nError might be cause by missing SVN command line tool\n\n {e}")
     
 def revert_files(selected_files):
     """
@@ -201,13 +203,13 @@ def revert_files(selected_files):
     try:
         for file in selected_files:
             # Run the SVN revert command for each file
-            args = ["svn", "revert", file]
-            result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
-
-            if result.returncode != 0:
-                messagebox.showerror("Error", f"Failed to revert file: {file}\n{result.stderr}")
+            try:
+                args = ["svn", "revert", file]
+                subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+            except Exception as e:
+                raise Exception("Failed to run SVN revert command", e)
     except Exception as e:
-        messagebox.showerror("Error", f"An error occurred while reverting files: {e}")
+        messagebox.showerror("Error", f"Failed to run SVN revert file\nError might be cause by missing SVN command line tool\n\n {e}")
 
 def copy_InstallConfig(destination):
     # Copy InstallConfig.exe from the remote SVN Tools/Misc Tools/InstallConfig folder to the local destination
@@ -216,7 +218,7 @@ def copy_InstallConfig(destination):
     try:
         subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Misc Tools/InstallConfig/InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
     except subprocess.CalledProcessError as e:
-        messagebox.showerror("Error", f"Failed to copy InstallConfig.exe: {e}")
+        raise Exception(f"Failed to copy InstallConfig.exe from SVN: {e}")
 
 def copy_RunScript(destination):
     # Copy RunScript.exe from the remote SVN Tools/Misc Tools/RunScript folder to the local destination
@@ -224,8 +226,8 @@ def copy_RunScript(destination):
     svn_path = config.get("svn_path")
     try:
         subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Misc Tools/InstallConfig/RunScript.bat", destination], check=True,  stdout=subprocess.DEVNULL, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
-    except subprocess.CalledProcessError as e:
-        messagebox.showerror("Error", f"Failed to copy RunScript.exe: {e}")
+    except Exception as e:
+        raise Exception(f"Failed to copy RunScript.exe from SVN: {e}")
 
 def copy_UnderTestInstallConfig(destination):
     # Copy InstallConfig.exe from the remote SVN Tools/Misc Tools/InstallConfig folder to the local destination
@@ -233,5 +235,5 @@ def copy_UnderTestInstallConfig(destination):
     svn_path = config.get("svn_path")
     try:
         subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Test/UNDERTEST_InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL,)
-    except subprocess.CalledProcessError as e:
-        messagebox.showerror("Error", f"Failed to copy InstallConfig.exe: {e}")
+    except Exception as e:
+        raise Exception(f"Failed to copy UNDERTEST_InstallConfig.exe: {e}")

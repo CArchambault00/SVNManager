@@ -102,23 +102,32 @@ def switch_to_modify_patch_menu(patch_details):
         messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
 
 def check_latest_version(root):
+    random_number = random.randint(1, 1000000)
+    url = f"https://raw.githubusercontent.com/CArchambault00/SVNManager/main/latest_version.txt?nocache={random_number}"
+
+    # Crée la requête avec les bons headers
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
+
     try:
-        random_number = random.randint(1, 1000000)
-        url = f"https://raw.githubusercontent.com/CArchambault00/SVNManager/main/latest_version.txt?nocache={random_number}"
-        response = urllib.request.Request(
-                                            url,
-                                            headers={
-                                                "Cache-Control": "no-cache, no-store, must-revalidate",
-                                                "Pragma": "no-cache",
-                                                "Expires": "0"
-                                            }
-                                        )
-        latest_version = response.read().decode("utf-8").strip()
+        # Envoie la requête et lit la réponse
+        with urllib.request.urlopen(req) as response:
+            latest_version = response.read().decode("utf-8").strip()
+        
         if latest_version != APP_VERSION:
-            messagebox.showwarning("Update Available", f"A new version ({latest_version}) is available.\nYou are running version {APP_VERSION}.")
+            messagebox.showwarning(
+                "Update Available",
+                f"A new version ({latest_version}) is available.\nYou are running version {APP_VERSION}."
+            )
             sys.exit(0)
+
     except Exception as e:
-        # Optional: silent fail or notify user
         print(f"Failed to check for latest version: {e}")
 
 def setup_gui():
