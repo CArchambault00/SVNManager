@@ -7,10 +7,10 @@ from create_component import create_patches_treeview, create_file_listbox, creat
 from create_buttons import create_button_frame, create_button_frame_patch, create_button_frame_modify_patch, create_button_frame_patches
 from config import load_config, get_unset_var
 from native_topbar import initialize_native_topbar
-import subprocess
 import urllib.request
 import random
 import sys
+import os
 
 
 APP_VERSION = "1.0.5"
@@ -132,8 +132,15 @@ def check_latest_version(root):
 
 def setup_gui():
     global root
-    root = TkinterDnD.Tk()  # Initialize TkinterDnD root window
-    #root.iconbitmap("SVNManagerIcon.ico")
+    root = TkinterDnD.Tk()  # Initialize TkinterDnD root window 
+    if getattr(sys, 'frozen', False):  # Running as a PyInstaller bundle
+        bundle_dir = sys._MEIPASS
+    else:
+        bundle_dir = os.path.abspath(".")
+
+    icon_path = os.path.join(bundle_dir, "SVNManagerIcon.ico")
+        
+    root.iconbitmap(icon_path)
 
     root.title("SVN Manager")
     root.geometry("900x600")
