@@ -6,7 +6,7 @@ LATEST_VERSION="latest_version.txt"
 VERSION_INFO="version_info.txt"
 
 # Get the current version from app.py
-CURRENT_VERSION=$(grep 'APP_VERSION = "' "$APP_PY" | cut -d'"' -f2)
+CURRENT_VERSION=$(grep 'APP_VERSION = "' "$LATEST_VERSION" | cut -d'"' -f2)
 IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
 
 # Increment patch version
