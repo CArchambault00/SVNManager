@@ -13,7 +13,7 @@ import sys
 import os
 import webbrowser
 
-APP_VERSION = "1.0.9"
+APP_VERSION = "1.0.8"
 
 def create_main_layout(root):
     root.grid_rowconfigure(1, weight=1)
@@ -122,7 +122,7 @@ def check_latest_version(root):
             if messagebox.askyesno("Update Available", f"A new version ({latest_version}) is available.\nDo you want to open the download page?"):
                 release_url = f"https://github.com/CArchambault00/SVNManager/releases/tag/{latest_version}"
                 webbrowser.open(release_url)
-                sys.exit(0)
+            sys.exit(0)
 
     except Exception as e:
         print(f"Failed to check for latest version: {e}")
