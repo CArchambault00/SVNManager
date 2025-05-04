@@ -1,13 +1,12 @@
 # patches_operation.py
 from db_handler import dbClass
-from svn_operations import get_file_specific_version, get_file_info, commit_files, revert_files, get_file_revision, copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig
-from patch_generation import PATCH_DIR
+from svn_operations import get_file_specific_version, get_file_info, commit_files, get_file_revision
 import os
 from config import load_config, verify_config
 from patch_generation import create_patch_files
 import tkinter as tk
 import time
-from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file
+from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, PATCH_DIR
 from tkinter import messagebox
 
 patch_info_dict = {}
@@ -193,5 +192,4 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
     except Exception as e:
         db.conn.rollback()
         cleanup_files(patch_version_folder)
-        revert_files(selected_files)
         tk.messagebox.showerror("Error", f"Failed to update patch: {e}")

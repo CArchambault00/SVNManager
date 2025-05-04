@@ -197,10 +197,6 @@ def revert_files(selected_files):
     config = load_config()
     svn_path = config.get("svn_path")
 
-    if not selected_files:
-        messagebox.showerror("Error", "No files selected for revert!")
-        return
-
     try:
         for file in selected_files:
             # Run the SVN revert command for each file

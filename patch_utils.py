@@ -5,6 +5,8 @@ import os
 from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision
 from db_handler import dbClass
 
+PATCH_DIR = "D:/cyframe/jtdev/Patches/Current"
+
 def get_md5_checksum(file_path):
     """Returns the MD5 checksum of a given file."""
     md5_hash = hashlib.md5()

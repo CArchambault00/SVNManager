@@ -1,25 +1,24 @@
 import os
-import shutil
-from svn_operations import commit_files, get_file_revision, revert_files, copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig
+from svn_operations import commit_files, get_file_revision
 from tkinter import messagebox
 import time
 import version_operation as vo
 from db_handler import dbClass
-from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files
+from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files, PATCH_DIR
 from config import load_config, verify_config
 
-PATCH_DIR = "D:/cyframe/jtdev/Patches/Current"
 def generate_patch(selected_files, patch_letter, patch_version, patch_description):
     db = dbClass()
-    
-    verify_config()
-    config = load_config()
-    svn_path = config.get("svn_path")
-    username = config.get("username")
-    
-    patch_name = patch_letter + patch_version
-    patch_version_folder = os.path.join(PATCH_DIR, patch_name)
+
     try:
+        patch_name = patch_letter + patch_version
+        patch_version_folder = os.path.join(PATCH_DIR, patch_name)
+
+        verify_config()
+        config = load_config()
+        svn_path = config.get("svn_path")
+        username = config.get("username")
+
         if not patch_version:
             messagebox.showerror("Error", "Patch version is required!")
             return
@@ -60,5 +59,4 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
     except Exception as e:
         db.conn.rollback()
         cleanup_files(patch_version_folder)
-        revert_files(selected_files)
         messagebox.showerror("Error", f"Failed to create patch! {str(e)}")
