@@ -122,8 +122,7 @@ def check_latest_version(root):
             if messagebox.askyesno("Update Available", f"A new version ({latest_version}) is available.\nDo you want to open the download page?"):
                 release_url = f"https://github.com/CArchambault00/SVNManager/releases/tag/{latest_version}"
                 webbrowser.open(release_url)
-        else:
-            print("You are using the latest version.")
+                sys.exit(0)
 
     except Exception as e:
         print(f"Failed to check for latest version: {e}")
