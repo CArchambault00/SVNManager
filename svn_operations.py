@@ -231,6 +231,6 @@ def copy_UnderTestInstallConfig(destination):
     config = load_config()
     svn_path = config.get("svn_path")
     try:
-        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Test/UNDERTEST_InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL,)
+        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Test/UNDERTEST_InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception as e:
         raise Exception(f"Failed to copy UNDERTEST_InstallConfig.exe: {e}")
