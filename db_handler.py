@@ -11,8 +11,6 @@ class dbClass:
         self.connect()
 
     def connect(self):
-        config = load_config()
-        INSTANT_CLIENT = config.get("instant_client", "")
         try:
              # Detect if running inside compiled .exe
             if getattr(sys, 'frozen', False):
@@ -23,6 +21,9 @@ class dbClass:
                 base_path = os.path.dirname(os.path.abspath(__file__))
 
             instantclient_path = os.path.join(base_path, "instantclient_12_1")
+
+            os.environ["TNS_ADMIN"] = instantclient_path
+            
             oracledb.init_oracle_client(lib_dir=instantclient_path)
             self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='PROD_CYFRAME')
         except oracledb.Error as e:
