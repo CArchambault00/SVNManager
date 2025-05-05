@@ -2,10 +2,11 @@ import os
 from svn_operations import commit_files, get_file_revision
 from tkinter import messagebox
 import time
+import datetime as date
 import version_operation as vo
 from db_handler import dbClass
 from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files, PATCH_DIR
-from config import load_config, verify_config
+from config import load_config, verify_config, log_error
 
 def generate_patch(selected_files, patch_letter, patch_version, patch_description):
     db = dbClass()
@@ -60,3 +61,6 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
         db.conn.rollback()
         cleanup_files(patch_version_folder)
         messagebox.showerror("Error", f"Failed to create patch! {str(e)}")
+        log_error(f"Failed to create patch: {str(e)}")
+        log_error(f"Date:" + date.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        log_error(f"------------------------------")

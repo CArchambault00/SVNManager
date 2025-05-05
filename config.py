@@ -34,3 +34,7 @@ def verify_config():
     unsetVar = get_unset_var()
     if unsetVar:
         raise ValueError(f"The following variables are not set: {', '.join(unsetVar)}")
+    
+def log_error(message):
+    with open("./SVNManager_log.txt", "a") as log_file:
+        log_file.write(f"{message}\n")

@@ -2,12 +2,13 @@
 from db_handler import dbClass
 from svn_operations import get_file_specific_version, get_file_info, commit_files, get_file_revision
 import os
-from config import load_config, verify_config
+from config import load_config, verify_config, log_error
 from patch_generation import create_patch_files
 import tkinter as tk
 import time
 from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, PATCH_DIR
 from tkinter import messagebox
+import datetime as date
 
 patch_info_dict = {}
 
@@ -113,6 +114,9 @@ def build_patch(patch_info):
         db.conn.rollback()
         cleanup_files(patch_version_folder)
         tk.messagebox.showerror("Error", f"Failed to build patch: {e}")
+        log_error(f"Failed to build patch: {str(e)}")
+        log_error(f"Date:" + date.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        log_error(f"------------------------------")
 
 def refresh_patch_files(treeview, patch_info):
     """
@@ -193,3 +197,6 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
         db.conn.rollback()
         cleanup_files(patch_version_folder)
         tk.messagebox.showerror("Error", f"Failed to update patch: {e}")
+        log_error(f"Failed to update patch: {str(e)}")
+        log_error(f"Date:" + date.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        log_error(f"------------------------------")
