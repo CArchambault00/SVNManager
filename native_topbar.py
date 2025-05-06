@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from config import load_config, get_unset_var
-from dialog import set_username, set_svn_folder #, set_instantclient
+from dialog import set_username, set_svn_folder, set_currentpatches, set_dsn_name
 
 def initialize_native_topbar(root):
 # Create the menu bar
@@ -30,6 +30,14 @@ def initialize_native_topbar(root):
     config_menu.add_command(
         label="SVN folder ❌" if "svn_path" in unset_var else "SVN folder ✔️",
         command=lambda: set_svn_folder(config_menu, menu_bar))
+    
+    config_menu.add_command(
+    label="Current Patches Folder ❌" if "current_patches" in unset_var else "Current Patches Folder ✔️",
+    command=lambda: set_currentpatches(config_menu, menu_bar))
+
+    config_menu.add_command(
+    label="DSN name ❌" if "dsn_name" in unset_var else "DSN name ✔️",
+    command=lambda: set_dsn_name(config_menu, menu_bar))
 
     help_menu = tk.Menu(menu_bar, tearoff=0)
     help_menu.add_command(

@@ -1,7 +1,7 @@
 import oracledb
 from typing import Optional, List, Dict
 from tkinter import messagebox
-from config import log_error
+from config import log_error, load_config
 import os
 import sys
 import datetime as date
@@ -13,6 +13,7 @@ class dbClass:
 
     def connect(self):
         instantclient_path = None
+        config = load_config()
         try:
              # Detect if running inside compiled .exe
             if getattr(sys, 'frozen', False):
@@ -25,7 +26,7 @@ class dbClass:
             instantclient_path = os.path.join(base_path, "instantclient_12_1")
             
             oracledb.init_oracle_client(lib_dir=instantclient_path)
-            self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='CYFRAMEPROD')
+            self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn=config.get("dsn_name", "CYFRAMEPROD"))
         except oracledb.Error as e:
             messagebox.showerror("Database Error", f"Failed to connect to the database, Application will not work properly\n{e}")
             log_error(f"Database Error: {e}")

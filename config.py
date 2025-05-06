@@ -3,13 +3,14 @@ import json
 from tkinter import messagebox
 
 CONFIG_FILE = "svn_config.json"
-neededVar = ["svn_path", "username"]   # , "instant_client"
+neededVar = ["svn_path", "username", "current_patches"]   # , "instant_client"
+specialvar = ["dsn_name"]
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
             return json.load(f)
-    return {"svn_path": "", "username": ""}   # , "instant_client": ""
+    return {"svn_path": "", "username": "", "current_patches": "D:/cyframe/jtdev/Patches/Current", "dsn_name" : "CYFRAMEPROD"}   # , "instant_client": ""
 
 def save_config(data):
     with open(CONFIG_FILE, "w") as f:

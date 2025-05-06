@@ -90,6 +90,12 @@ def validate_svn_folder(path):
     result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return result.returncode == 0
 
+def validate_current_patches(path):
+    return os.path.exists(path) and os.path.isdir(path)
+
+def validate_dsn_name(dsn_name):
+    """Validation function for DSN name."""
+    return bool(dsn_name)  # Check if the DSN name is not empty
 
 def set_svn_folder(config_menu, menu_bar):
     config = load_config()
@@ -104,7 +110,7 @@ def set_svn_folder(config_menu, menu_bar):
         config["svn_path"] = path
         save_config(config)
         unset_var = get_unset_var()
-        update_menu_labels(config_menu, menu_bar, 2, "SVN folder ✔️", unset_var)
+        update_menu_labels(config_menu, menu_bar, 1, "SVN folder ✔️", unset_var)
         show_messagebox("info", "Info", "SVN folder path changed successfully!")
 
     if not handle_path_selection(
@@ -112,3 +118,46 @@ def set_svn_folder(config_menu, menu_bar):
         "The selected folder is not a valid SVN folder"
     ):
         show_messagebox("warning", "Warning", "SVN folder path not changed.")
+
+
+def set_currentpatches(config_menu, menu_bar):
+    config = load_config()
+    current_patches = config.get("current_patches", "")
+
+    if current_patches:
+            show_messagebox("info", "Info", f"Current patches folder path set to: {current_patches}")
+            if not messagebox.askyesno("Change Current patches folder Path", "Do you want to change the Current patches folder path?"):
+                return
+
+    def success_callback(path):
+        config["current_patches"] = path
+        save_config(config)
+        unset_var = get_unset_var()
+        update_menu_labels(config_menu, menu_bar, 2, "Current patches folder ✔️", unset_var)
+        show_messagebox("info", "Info", "Current patches folder changed successfully!")
+
+    if not handle_path_selection(
+        "Select Current patches folder", validate_current_patches, success_callback,
+        "The selected folder is not a valid Current patches folder"
+    ):
+        show_messagebox("warning", "Warning", "Current patches folder path not changed.")
+
+def set_dsn_name(config_menu, menu_bar):
+    config = load_config()
+    dsn_name = config.get("dsn_name", "")
+
+    if dsn_name:
+        show_messagebox("info", "Info", f"DSN name is already set to: {dsn_name}")
+        if not messagebox.askyesno("Change DSN Name", "Do you want to change the DSN name?"):
+            return
+
+    dsn_name = simpledialog.askstring("DSN Name", "Enter your DSN name")
+    if dsn_name:
+        config["dsn_name"] = dsn_name
+        save_config(config)
+        unset_var = get_unset_var()
+        update_menu_labels(config_menu, menu_bar, 3, "DSN Name ✔️", unset_var)
+        show_messagebox("info", "Info", "DSN name saved successfully!")
+    else:
+        show_messagebox("warning", "Warning", "DSN name not set. Some features may not work correctly.")
+        update_menu_labels(config_menu, menu_bar, 3, "DSN Name ❌", get_unset_var())
