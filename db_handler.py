@@ -23,11 +23,9 @@ class dbClass:
                 base_path = os.path.dirname(os.path.abspath(__file__))
 
             instantclient_path = os.path.join(base_path, "instantclient_12_1")
-
-            os.environ["TNS_ADMIN"] = instantclient_path + "\\network\\admin"
             
             oracledb.init_oracle_client(lib_dir=instantclient_path)
-            self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='PROD_CYFRAME')
+            self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn='CYFRAMEPROD')
         except oracledb.Error as e:
             messagebox.showerror("Database Error", f"Failed to connect to the database, Application will not work properly\n{e}")
             log_error(f"Database Error: {e}")

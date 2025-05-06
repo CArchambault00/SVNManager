@@ -4,61 +4,7 @@ from tkinter import messagebox
 from config import load_config, verify_config
 import xml.etree.ElementTree as ET
 import os
-
-def load_user_locked_files():
-    config = load_config()
-    username = config.get("username")
-    svn_path = config.get("svn_path")
-
-    if not os.path.isdir(svn_path):
-        messagebox.showwarning("Warning", "Invalid SVN path!")
-        return []
-
-    result = None
-    try :
-        command = ["svn", "status", "--xml"]
-        result = subprocess.run(command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to run SVN status command\nError might be cause by missing SVN command line tool\n\n {e}")
-        return []
-   
-    try:
-        locked_files = []
-        root = ET.fromstring(result.stdout)
-
-        # Iterate through all <entry> elements in the XML
-        for entry in root.findall(".//entry"):
-            # Get the file path from the 'path' attribute of the <entry> element
-            file_path = entry.get("path")
-
-            file_path = file_path.replace("\\", "/")
-
-            # Check for <lock> in <wc-status>
-            wc_status = entry.find("wc-status")
-            if wc_status is not None:
-                lock = wc_status.find("lock")
-                if lock is not None:
-                    lock_owner = lock.find("owner").text
-                    if lock_owner == username:
-                        locked_files.append(file_path)
-                        continue  # Skip checking <repos-status> if already found in <wc-status>
-
-            # Check for <lock> in <repos-status>
-            repos_status = entry.find("repos-status")
-            if repos_status is not None:
-                lock = repos_status.find("lock")
-                if lock is not None:
-                    lock_owner = lock.find("owner").text
-                    if lock_owner == username:
-                        locked_files.append(file_path)
-        return locked_files
-    except ET.ParseError as e:
-        messagebox.showerror("Error", f"Failed to parse SVN status XML: {e}")
-        return []
-    except Exception as e:
-        messagebox.showerror("Error", f"An error occurred while processing SVN status: {e}")
-        return []
-
+import re
 
 def lock_files(selected_files, patch_listbox):
     _lock_unlock_files(selected_files, patch_listbox, lock=True)
@@ -94,23 +40,71 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True):
         base_command += selected_files
 
         # Run the svn lock/unlock command
-        subprocess.run(base_command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+        result = subprocess.run(base_command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+        if result.returncode != 0:
+            stderr = result.stderr
+
+            # Look for already locked warnings
+            locked_info = re.findall(
+                r"Path '(.*?)' is already locked by user '(.*?)'", stderr
+            )
+
+            locked_by_others = [
+                (file, user) for file, user in locked_info if user != username
+            ]
+
+            if locked_by_others:
+                locked_files_msg = "\n".join(
+                        f"{file} → locked by {user}" for file, user in locked_by_others
+                    )
+                raise Exception(f"Some files are already locked by another user:\n\n{locked_files_msg}")
         messagebox.showinfo("Success", f"Files {'locked' if lock else 'unlocked'} successfully!")
     except Exception as e:
         messagebox.showerror("Error", f"Failed to locked files\nError might be cause by missing SVN command line tool\n\n {e}")
 
     refresh_locked_files(patch_listbox)
-
+    
 def refresh_locked_files(files_listbox):
     config = load_config()
-    svn_path = config.get("svn_path")
-    if svn_path:
-        svn_path = svn_path.replace("\\", "/")
+    svn_path = config.get("svn_path", "").replace("\\", "/")
+    username = config.get("username")
+
+    if not os.path.isdir(svn_path):
+        messagebox.showwarning("Warning", "Invalid SVN path!")
+        return
+
+    try:
+        result = subprocess.run(
+            ["svn", "status", "--xml", "--verbose"],
+            cwd=svn_path,
+            capture_output=True,
+            text=True,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        if result.returncode != 0:
+            raise Exception(result.stderr)
+
         files_listbox.delete(*files_listbox.get_children())
-        for file in load_user_locked_files():
-            file_name = file
-            lock_by_user, lock_owner, revision = get_file_info(file)
-            files_listbox.insert("", "end", values=("locked",revision, file_name), tags=("unchecked",))
+        root = ET.fromstring(result.stdout)
+
+        for entry in root.findall(".//entry"):
+            path = entry.get("path", "").replace("\\", "/")
+            wc_status = entry.find("wc-status")
+            revision = wc_status.get("revision") if wc_status is not None else ""
+
+            # Check wc-status and repos-status for lock
+            for status_tag in ["wc-status", "repos-status"]:
+                lock = entry.find(f"{status_tag}/lock")
+                if lock is not None and lock.findtext("owner") == username:
+                    files_listbox.insert("", "end", values=("locked", revision, path), tags=("unchecked",))
+                    break
+
+    except ET.ParseError as e:
+        messagebox.showerror("Error", f"Failed to parse SVN status XML:\n{e}")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to load locked files:\n{e}")
+
 
 def commit_files(selected_files):
     config = load_config()
