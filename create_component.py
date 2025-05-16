@@ -4,6 +4,7 @@ from tkinterdnd2 import DND_FILES
 from typing import Callable
 from patches_operations import get_selected_patch
 from buttons_function import select_all_files, deselect_all_files, handle_drop
+from datetime import datetime
 
 # Constants for column configurations
 TREEVIEW_COLUMNS = [
@@ -65,7 +66,7 @@ def create_file_listbox(parent: tk.Widget) -> ttk.Treeview:
     )
 
     for col_name, col_width in LISTBOX_COLUMNS:
-        listbox.heading(col_name, text=col_name)
+        listbox.heading(col_name, text=col_name, command=lambda _col=col_name: sort_treeview_column(listbox, _col, False))
         listbox.column(col_name, width=col_width, stretch=tk.NO)
 
     add_scrollbars(listbox, parent)
@@ -80,6 +81,33 @@ def create_file_listbox(parent: tk.Widget) -> ttk.Treeview:
 
     return listbox
 
+def sort_treeview_column(treeview: ttk.Treeview, col: str, reverse: bool) -> None:
+    """
+    Sort the Treeview column.
+    """
+    data = [(treeview.set(child, col), child) for child in treeview.get_children('')]
+
+    # Sort by date if the column is "Lock Date"
+    if col == "Lock Date":
+        data.sort(key=lambda item: parse_date(item[0]), reverse=reverse)
+    else:
+        data.sort(reverse=reverse)
+
+    for index, (_, child) in enumerate(data):
+        treeview.move(child, '', index)
+
+    # Reverse the sorting order for the next click
+    treeview.heading(col, command=lambda: sort_treeview_column(treeview, col, not reverse))
+
+
+def parse_date(date_str: str) -> datetime:
+    """
+    Parse a date string into a datetime object. Return a default date if parsing fails.
+    """
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return datetime.min  # Default to the earliest possible date
 
 def create_top_frame(
     parent: tk.Widget,
