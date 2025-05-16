@@ -9,6 +9,7 @@ import time
 from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file
 from tkinter import messagebox
 import datetime as date
+from dialog import display_patch_files
 
 patch_info_dict = {}
 
@@ -75,6 +76,7 @@ def get_selected_patch():
 
 def build_patch(patch_info):
     config = load_config()
+    print(patch_info)
     patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_info["NAME"])
     os.makedirs(patch_version_folder, exist_ok=True)
     try:
@@ -200,3 +202,29 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
         log_error(f"Failed to update patch: {str(e)}")
         log_error(f"Date:" + date.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         log_error(f"------------------------------")
+
+def view_files_from_patch(patch_info):
+    ## Show files from the patch in a dialog
+    db = dbClass()
+    
+    patch_id = patch_info["PATCH_ID"]
+    files = db.get_patch_file_list(patch_id)
+    file_list = []
+
+    for file in files:
+        if file["FOLDER_TYPE"] == '1':
+            file_path = "webpage" + file["PATH"]
+        else:
+            file_path = 'Database' + file["PATH"]
+        lock_by_user,lock_owner,svn_revision, lock_date = get_file_info(file_path)
+        if lock_by_user:
+            file_list.append(f'locked || VERSION: {file["VERSION"]} || {file_path} || LOCKDATE: {lock_date}')
+        elif lock_by_user== False and lock_owner == "":
+            file_list.append(f'unlocked || VERSION: {file["VERSION"]} || {file_path}')
+        else:
+            file_list.append(f'@locked - {lock_owner} || VERSION: {file["VERSION"]} || {file_path} || LOCKDATE: {lock_date}')
+
+    display_patch_files(file_list, patch_info["NAME"], patch_info["COMMENTS"], 
+                        patch_info["USER_ID"], str(patch_info["CREATION_DATE"]))
+
+    

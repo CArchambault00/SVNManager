@@ -3,7 +3,7 @@ from tkinter import ttk
 from svn_operations import lock_files, unlock_files, refresh_locked_files
 from buttons_function import lock_selected_files, unlock_selected_files
 from patch_generation import generate_patch
-from buttons_function import insert_next_version, modify_patch, build_existing_patch
+from buttons_function import insert_next_version, modify_patch, build_existing_patch, view_patch_files
 from patches_operations import refresh_patches, update_patch
 from config import load_config
 from db_handler import dbClass
@@ -124,3 +124,6 @@ def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_
 
     # Generate patch
     tk.Button(parent, text="Build Patch", command=lambda: build_existing_patch([patches_listbox.item(item, "values") for item in patches_listbox.selection()]), background="#FCFF80", width=15).pack(side="top", pady=5)
+
+    # View patch files
+    tk.Button(parent, text="View Patch Files", command=lambda: view_patch_files([patches_listbox.item(item, "values") for item in patches_listbox.selection()]), background="#44FF80", width=15).pack(side="top", pady=5)

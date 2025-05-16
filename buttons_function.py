@@ -1,7 +1,7 @@
 import tkinter as tk
 from svn_operations import lock_files, unlock_files
 from version_operation import next_version
-from patches_operations import get_full_patch_info, set_selected_patch, build_patch
+from patches_operations import get_full_patch_info, set_selected_patch, build_patch, view_files_from_patch
 import os
 from svn_operations import get_file_info
 from config import load_config
@@ -94,3 +94,8 @@ def build_existing_patch(selected_patch):
         full_patch_info = get_full_patch_info(patch_details[0])
         build_patch(full_patch_info)
         
+def view_patch_files(selected_patch):
+    if selected_patch:
+        patch_details = selected_patch[0]  # Assuming selected_patch is a list of selected items
+        full_patch_info = get_full_patch_info(patch_details[0])
+        view_files_from_patch(full_patch_info)

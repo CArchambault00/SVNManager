@@ -161,3 +161,44 @@ def set_dsn_name(config_menu, menu_bar):
     else:
         show_messagebox("warning", "Warning", "DSN name not set. Some features may not work correctly.")
         update_menu_labels(config_menu, menu_bar, 3, "DSN Name ❌", get_unset_var())
+
+import tkinter as tk
+
+def display_patch_files(patche_files, patch_name, patch_description, username, patch_creation_date):
+    """Display the patch files in a scrollable window."""
+    # Create a new top-level window
+    window = tk.Toplevel()
+    window.title("Patch Files")
+    window.geometry("900x400")  # Set a default size for the window
+
+    window.transient()  # Set the window as a child of the main app
+    window.grab_set() 
+    
+    # Create a Text widget with a vertical scrollbar
+    text_frame = tk.Frame(window)
+    text_frame.pack(fill="both", expand=True)
+
+    text_widget = tk.Text(text_frame, wrap="word", state="normal")
+    text_widget.pack(side="left", fill="both", expand=True)
+
+    scrollbar = tk.Scrollbar(text_frame, command=text_widget.yview)
+    scrollbar.pack(side="right", fill="y")
+
+    text_widget.config(yscrollcommand=scrollbar.set)
+
+    # Build the message content
+    message = f"Patch Name: {patch_name}\n"
+    message += f"Description: {patch_description}\n"
+    message += f"Created by: {username}\n"
+    message += f"Creation Date: {patch_creation_date}\n\n"
+    message += "Files:\n"
+    for file in patche_files:
+        message += f"- {file}\n"
+
+    # Insert the message into the Text widget
+    text_widget.insert("1.0", message)
+    text_widget.config(state="disabled")  # Make the Text widget read-only
+
+    # Add a close button
+    close_button = tk.Button(window, text="Close", command=window.destroy)
+    close_button.pack(pady=10)
