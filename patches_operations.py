@@ -150,6 +150,8 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
     config = load_config()
     svn_path = config.get("svn_path")
     username = config.get("username")
+
+    patch_version_entry = patch_version_entry.upper()
     
     patch_name = patch_version_letter + patch_version_entry
     patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_name)

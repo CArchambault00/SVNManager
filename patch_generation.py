@@ -14,6 +14,8 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
     try:
         verify_config()
         config = load_config()
+        
+        patch_version = patch_version.upper()
 
         patch_name = patch_letter + patch_version
         patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_name)
