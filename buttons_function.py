@@ -6,8 +6,6 @@ import os
 from svn_operations import get_file_info
 from config import load_config
 
-PATCH_DIR = "D:/cyframe/jtdev/Patches/Current"
-
 def lock_selected_files(files_listbox):
     selected_files = [files_listbox.item(item, "values")[2] for item in files_listbox.selection()]
     lock_files(selected_files, files_listbox)
@@ -50,15 +48,15 @@ def handle_drop(event, listbox):
                 file = file.replace("\\", "/")
                 file = file.replace(svn_path + "/", "")
                 if not check_files_is_present(listbox, [file]):
-                    lock_by_user, lock_owner, revision = get_file_info(file)
+                    lock_by_user, lock_owner, revision, lock_date = get_file_info(file)
                     if lock_by_user:
-                        listbox.insert('', 'end', values=('locked',revision, file))
+                        listbox.insert('', 'end', values=('locked',revision, file, lock_date))
                     elif lock_by_user== False and lock_owner == "":
-                        listbox.insert('', 'end', values=('unlocked',revision, file))
+                        listbox.insert('', 'end', values=('unlocked',revision, file, lock_date))
                     else:
-                        add_file = tk.messagebox.askyesno("File is locked", f"The file {file} is locked by {lock_owner}. Do you want to add it to the patch anyway?")
+                        add_file = tk.messagebox.askyesno("File is locked", f"The file {file} is locked by {lock_owner}. Do you want to add it anyway?")
                         if add_file:
-                            listbox.insert('', 'end', values=('@locked',revision, file))
+                            listbox.insert('', 'end', values=(f'@locked - {lock_owner}',revision, file, lock_date))
             else:
                 files_outside_svn.append(file)
         if os.path.isdir(file):
@@ -69,15 +67,15 @@ def handle_drop(event, listbox):
                         file = file.replace("\\", "/")
                         file = file.replace(svn_path + "/", "")
                         if not check_files_is_present(listbox, [file]):
-                            lock_by_user, lock_owner,revision = get_file_info(file)
+                            lock_by_user, lock_owner,revision,lock_date = get_file_info(file)
                             if lock_by_user:
-                                listbox.insert('', 'end', values=('locked',revision, file))
+                                listbox.insert('', 'end', values=('locked',revision, file,lock_date))
                             elif lock_by_user== False and lock_owner == "":
-                                listbox.insert('', 'end', values=('unlocked',revision, file))
+                                listbox.insert('', 'end', values=('unlocked',revision, file,lock_date))
                             else:
                                 add_file = tk.messagebox.askyesno("File is locked", f"The file {file} is locked by {lock_owner}. Do you want to add it to the patch anyway?")
                                 if add_file:
-                                    listbox.insert('', 'end', values=('@locked',revision, file))
+                                    listbox.insert('', 'end', values=(f'@locked - {lock_owner}',revision, file,lock_date))
                     else:
                         files_outside_svn.append(file)
     if files_outside_svn:

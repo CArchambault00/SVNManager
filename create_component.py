@@ -18,6 +18,7 @@ LISTBOX_COLUMNS = [
     ("Status", 60),
     ("Version", 60),
     ("Files Path", 800),
+    ("Lock Date", 120),
 ]
 
 def add_scrollbars(widget: ttk.Treeview, parent: tk.Widget) -> None:
@@ -97,9 +98,9 @@ def create_top_frame(
 
     # Button configurations
     buttons = [
-        ("Lock/Unlock Menu", switch_to_lock_unlock_menu, "lock_unlock"),
-        ("Patch Menu", switch_to_patch_menu, "patch"),
-        ("Patches Menu", switch_to_patches_menu, "patches"),
+        ("Lock/Unlock", switch_to_lock_unlock_menu, "lock_unlock"),
+        ("Create Patch", switch_to_patch_menu, "patch"),
+        ("Patches List", switch_to_patches_menu, "patches"),
         ("Modify Patch", lambda: switch_to_modify_patch_menu(selected_patch) if selected_patch else switch_to_patches_menu, "modify_patch"),
     ]
 

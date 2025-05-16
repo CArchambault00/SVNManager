@@ -5,18 +5,19 @@ import time
 import datetime as date
 import version_operation as vo
 from db_handler import dbClass
-from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files, PATCH_DIR
+from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files
 from config import load_config, verify_config, log_error
 
-def generate_patch(selected_files, patch_letter, patch_version, patch_description):
+def generate_patch(selected_files, patch_letter, patch_version, patch_description, unlock_files):
     db = dbClass()
 
     try:
-        patch_name = patch_letter + patch_version
-        patch_version_folder = os.path.join(PATCH_DIR, patch_name)
-
         verify_config()
         config = load_config()
+
+        patch_name = patch_letter + patch_version
+        patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_name)
+
         svn_path = config.get("svn_path")
         username = config.get("username")
 
@@ -28,8 +29,8 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
             if not messagebox.askyesno("No Files Selected", "No files selected. Do you want to create an empty patch?"):
                 return
         
-        os.makedirs(PATCH_DIR, exist_ok=True)
-        commit_files(selected_files)
+        os.makedirs(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), exist_ok=True)
+        commit_files(selected_files, unlock_files)
         
         db.conn.begin()
         patch_id = db.create_patch_header(patch_letter, patch_version, patch_description, username, 

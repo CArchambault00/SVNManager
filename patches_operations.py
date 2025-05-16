@@ -6,7 +6,7 @@ from config import load_config, verify_config, log_error
 from patch_generation import create_patch_files
 import tkinter as tk
 import time
-from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, PATCH_DIR
+from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file
 from tkinter import messagebox
 import datetime as date
 
@@ -74,12 +74,12 @@ def get_selected_patch():
     return selected_patch
 
 def build_patch(patch_info):
-    patch_version_folder = os.path.join(PATCH_DIR, patch_info["NAME"])
+    config = load_config()
+    patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_info["NAME"])
     os.makedirs(patch_version_folder, exist_ok=True)
     try:
         db = dbClass()
         verify_config()
-        config = load_config()
         svn_path = config.get("svn_path")
         
         patch_id = patch_info["PATCH_ID"]
@@ -135,18 +135,16 @@ def refresh_patch_files(treeview, patch_info):
             file_path = "webpage" + file["PATH"]
         else:
             file_path = 'Database' + file["PATH"]
-        lock_by_user,lock_owner,svn_revision = get_file_info(file_path)
+        lock_by_user,lock_owner,svn_revision, lock_date = get_file_info(file_path)
         if lock_by_user:
-            treeview.insert('', 'end', values=('locked',file["VERSION"], file_path))
+            treeview.insert('', 'end', values=('locked',file["VERSION"], file_path, lock_date))
         elif lock_by_user== False and lock_owner == "":
-            treeview.insert('', 'end', values=('unlocked',file["VERSION"], file_path))
+            treeview.insert('', 'end', values=('unlocked',file["VERSION"], file_path, lock_date))
         else:
-            add_file = tk.messagebox.askyesno("File is locked", f"The file {file_path} is locked by {lock_owner}. Do you want to add it to the patch anyway?")
-            if add_file:
-                treeview.insert('', 'end', values=('@locked',file["VERSION"], file_path))
+            treeview.insert('', 'end', values=(f'@locked - {lock_owner}',file["VERSION"], file_path, lock_date))
 
 def update_patch(selected_files, patch_id, patch_version_letter, patch_version_entry, 
-                patch_description, switch_to_modify_patch_menu):
+                patch_description, switch_to_modify_patch_menu, unlock_files):
     verify_config()
     db = dbClass()
     config = load_config()
@@ -154,15 +152,15 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
     username = config.get("username")
     
     patch_name = patch_version_letter + patch_version_entry
-    patch_version_folder = os.path.join(PATCH_DIR, patch_name)
+    patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_name)
     try:
         if not selected_files or len(selected_files) == 0:
             if not messagebox.askyesno("No Files Selected", 
                                      "No files selected. Do you want to modify the patch to remove the files?"):
                 return
         
-        os.makedirs(PATCH_DIR, exist_ok=True)
-        commit_files(selected_files)
+        os.makedirs(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), exist_ok=True)
+        commit_files(selected_files,unlock_files)
         
         db.conn.begin()
         db.update_patch_header(patch_id, patch_version_letter, patch_version_entry, patch_description)

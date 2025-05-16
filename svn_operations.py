@@ -5,6 +5,7 @@ from config import load_config, verify_config
 import xml.etree.ElementTree as ET
 import os
 import re
+from datetime import datetime, timezone
 
 def lock_files(selected_files, patch_listbox):
     _lock_unlock_files(selected_files, patch_listbox, lock=True)
@@ -18,49 +19,63 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True):
         config = load_config()
         username = config.get("username")
         svn_path = config.get("svn_path")
-        
+
         if not selected_files:
             messagebox.showerror("Error", "No files selected to lock/unlock!")
             return
 
-        # Decide SVN command and lock message
-        if lock:
-            command = "lock"
-            lock_message = f"Locking by {username}"
-        else:
-            command = "unlock"
-
-        # Prepare the command
+        command = "lock" if lock else "unlock"
         base_command = ["svn", command]
 
         if lock:
+            lock_message = f"Locking by {username}"
             base_command += ["--message", lock_message]
 
-        # Add all files
         base_command += selected_files
 
-        # Run the svn lock/unlock command
-        result = subprocess.run(base_command, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+        result = subprocess.run(
+            base_command,
+            cwd=svn_path,
+            capture_output=True,
+            text=True,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        
         if result.returncode != 0:
             stderr = result.stderr
+            locked_by_others = []
+            must_update_files = []
 
-            # Look for already locked warnings
-            locked_info = re.findall(
-                r"Path '(.*?)' is already locked by user '(.*?)'", stderr
-            )
+            # Match standard "already locked" errors
+            matches = re.findall(r"Path '(/.*?)' is already locked by user '(.*?)'", stderr)
+            for path, user in matches:
+                if user != username:
+                    locked_by_others.append((path, user))
 
-            locked_by_others = [
-                (file, user) for file, user in locked_info if user != username
-            ]
+            # Match W160042: Lock failed errors for "newer version exists"
+            matches_alt = re.findall(r"W160042: Lock failed: newer version of '(.*?)' exists", stderr)
+            for path in matches_alt:
+                must_update_files.append(path.strip())
+
+            messages = []
 
             if locked_by_others:
-                locked_files_msg = "\n".join(
-                        f"{file} → locked by {user}" for file, user in locked_by_others
-                    )
-                raise Exception(f"Some files are already locked by another user:\n\n{locked_files_msg}")
-        messagebox.showinfo("Success", f"Files {'locked' if lock else 'unlocked'} successfully!")
+                locked_msg = "\n".join(f"{file:<35} -> locked by {user}" for file, user in locked_by_others)
+                messages.append(f"The following files could not be locked:\n\n{locked_msg}")
+
+            if must_update_files:
+                update_msg = "\n".join(f"{file:<35} -> must updated" for file in must_update_files)
+                messages.append(f"The following files have newer versions:\n\n{update_msg}")
+
+            if messages:
+                raise Exception("Lock/Unlock failed:\n" + "\n".join(messages))
+            else:
+                raise Exception("Lock/Unlock failed:\n" + "\n".join(stderr.splitlines()))
+        else:
+            messagebox.showinfo("Success", f"Files {'locked' if lock else 'unlocked'} successfully!")
     except Exception as e:
-        messagebox.showerror("Error", f"Failed to locked files\nError might be cause by missing SVN command line tool\n\n {e}")
+        messagebox.showerror("Error", f"Failed to {'lock' if lock else 'unlock'} files.\n\n{e}")
 
     refresh_locked_files(patch_listbox)
     
@@ -97,7 +112,19 @@ def refresh_locked_files(files_listbox):
             for status_tag in ["wc-status", "repos-status"]:
                 lock = entry.find(f"{status_tag}/lock")
                 if lock is not None and lock.findtext("owner") == username:
-                    files_listbox.insert("", "end", values=("locked", revision, path), tags=("unchecked",))
+                    created_utc = lock.findtext("created", "")
+                    if created_utc:
+                        dt_utc = datetime.strptime(created_utc.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+                        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+                        dt_local = dt_utc.astimezone()  # Convert to local time
+                        lock_date = dt_local.strftime("%Y-%m-%d %H:%M:%S")
+                    else:
+                        lock_date = ""
+                    files_listbox.insert(
+                        "", "end",
+                        values=("locked", revision, path, lock_date),
+                        tags=("unchecked",)
+                    )
                     break
 
     except ET.ParseError as e:
@@ -105,19 +132,25 @@ def refresh_locked_files(files_listbox):
     except Exception as e:
         messagebox.showerror("Error", f"Failed to load locked files:\n{e}")
 
-
-def commit_files(selected_files):
+def commit_files(selected_files, unlock_files):
     config = load_config()
     username = config.get("username")
     svn_path = config.get("svn_path")
+    print(unlock_files)
     if selected_files:
         args = [
             "svn", "commit",
             "--username", username,
             "--message", f"Committed by {username}",
-            "--no-unlock",
-            *selected_files
         ]
+
+        # Add unlock flag based on condition
+        if unlock_files == False:
+            args.append("--no-unlock")
+
+        # Add the files to commit
+        args.extend(selected_files)
+        print(args)
         try:
             subprocess.run(args, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
         except Exception as e:
@@ -128,7 +161,9 @@ def get_file_info(file):
     username = config.get("username")
     svn_path = config.get("svn_path")
 
-    args = ["svn", "info", file]
+    file_on_svn = "svn://10.31.10.249/" + file
+
+    args = ["svn", "info", file_on_svn]
     try:
         result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
         # Extract revision  
@@ -146,12 +181,21 @@ def get_file_info(file):
                 lock_owner = result.stdout.split("Lock Owner: ")[1].split("\n")[0].strip()
             except IndexError:
                 lock_owner = ""
+        lock_date = ""
+        if "Lock Created: " in result.stdout:
+            try:
+                created_str = result.stdout.split("Lock Created: ")[1].split("\n")[0].strip()
+                trimmed = created_str.split(" ")[0] + " " + created_str.split(" ")[1]
+                dt = datetime.strptime(trimmed, "%Y-%m-%d %H:%M:%S")
+                lock_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+            except IndexError:
+                lock_date = ""
 
         # Determine if the lock is by the current user
         is_lock_by_user = lock_owner == username
 
         # Always return a tuple (is_lock_by_user, lock_owner, revision)
-        return (is_lock_by_user, lock_owner, revision)
+        return (is_lock_by_user, lock_owner, revision, lock_date)
     except Exception as e:
         messagebox.showerror("Error", f"Failed to get {file} info from SVN\nError might be cause by missing SVN command line tool\n\n {e}")
         return (False, "", "")

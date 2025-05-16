@@ -39,6 +39,7 @@ def create_button_frame_patch(parent, files_listbox):
     ## Next Version Button
     tk.Button(patch_version_frame, text="Next Version", command=lambda: insert_next_version(patch_version_letter.get(), patch_version_entry), background="#80DDFF").pack(side="left", padx=5)
 
+
     ## Add a section to write the patch description
     patch_description_frame = tk.Frame(parent)
     patch_description_frame.pack(side="top", pady=5, fill="both", expand=True)
@@ -49,7 +50,16 @@ def create_button_frame_patch(parent, files_listbox):
     patch_description_entry = tk.Text(patch_description_frame, height=10, width=40)  # Changed to Text widget
     patch_description_entry.pack(side="top", padx=5, fill="both", expand=True)
 
-    tk.Button(parent, text="Generate Patch", command=lambda: generate_patch([files_listbox.item(item, "values")[2] for item in files_listbox.selection()], patch_version_letter.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip()), background="#FF8080", width=15).pack(side="top", pady=5)
+    # Add a checkbox button to unlock files after patch generation
+    unlock_files = tk.BooleanVar(value=False)
+    unlock_files_checkbox = tk.Checkbutton(
+        parent,
+        text="Unlock files after patch generation",
+        variable=unlock_files,
+    )
+    unlock_files_checkbox.pack(side="left", padx=5)
+
+    tk.Button(parent, text="Generate Patch", command=lambda: generate_patch([files_listbox.item(item, "values")[2] for item in files_listbox.selection()], patch_version_letter.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip(), unlock_files.get()), background="#FF8080", width=15).pack(side="top", pady=5)
 
 def create_button_frame_modify_patch(parent, files_listbox, patch_details, switch_to_modify_patch_menu):
     patch_version_frame = tk.Frame(parent)
@@ -81,8 +91,16 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     patch_description_entry = tk.Text(patch_description_frame, height=10, width=40)
     patch_description_entry.insert("1.0", patch_details['COMMENTS'])  # Set to the selected patch's description
     patch_description_entry.pack(side="top", padx=5, fill="both", expand=True)
-    
-    tk.Button(parent, text="Update Patch", command=lambda: update_patch([files_listbox.item(item, "values")[2] for item in files_listbox.selection()], patch_details["PATCH_ID"], patch_version_letter.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip(),switch_to_modify_patch_menu), background="#FF8080", width=15).pack(side="top", pady=5)
+
+    unlock_files = tk.BooleanVar(value=False)
+    unlock_files_checkbox = tk.Checkbutton(
+        parent,
+        text="Unlock files after patch generation",
+        variable=unlock_files,
+    )
+    unlock_files_checkbox.pack(side="left", padx=5)
+
+    tk.Button(parent, text="Update Patch", command=lambda: update_patch([files_listbox.item(item, "values")[2] for item in files_listbox.selection()], patch_details["PATCH_ID"], patch_version_letter.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip(),switch_to_modify_patch_menu, unlock_files.get()), background="#FF8080", width=15).pack(side="top", pady=5)
 
 def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_menu):
     config = load_config()
