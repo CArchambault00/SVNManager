@@ -2,7 +2,7 @@ import hashlib
 from tkinter import messagebox
 import shutil
 import os
-from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision, get_file_revision_batch
+from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision, get_file_revision_batch, get_file_head_revision, get_file_head_revision_batch
 from db_handler import dbClass
 import time
 
@@ -135,7 +135,7 @@ def extract_build_number(patch_name):
             minor = version_parts[1]
             revision = '.'.join(version_parts[2:])  # In case revision has dots
         
-        # Clean up revision if it has letters
+        # Clean up revision if it has prefixes
         if revision and not revision[-1].isdigit():
             revision = revision[:-1]
         
@@ -184,19 +184,16 @@ def create_readme_file(patch_version_folder, patch_name, username, creation_date
         webpage_files = []
         database_files = []
         
-        # Get file revisions in batch if they're strings
-        str_files = [f for f in files if isinstance(f, str)]
-        if str_files:
-            revisions = get_file_revision_batch(str_files)
-        
         for file in files:
             if isinstance(file, dict):
+                # Files from database already have their versions
                 if file["FOLDER_TYPE"] == '1':
                     webpage_files.append(f"webpage{file['PATH']} ({file['VERSION']})")
                 else:
                     database_files.append(f"Database{file['PATH']} ({file['VERSION']})")
             else:
-                revision = revisions.get(file, "unknown")
+                # For string file paths, get the HEAD revision
+                revision = get_file_head_revision(file)
                 if file.startswith("webpage"):
                     webpage_files.append(f"{file} ({revision})")
                 else:

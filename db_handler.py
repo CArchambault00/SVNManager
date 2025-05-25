@@ -121,7 +121,7 @@ class dbClass:
         """
         return self.execute_query(sql, {'folder': folder})
 
-    def create_patch_header(self, patch_letter:str , patch_version:str, patch_desc: str, username: str, personal: bool, major:int, minor:int, revision:int) -> int:
+    def create_patch_header(self, patch_prefixe:str , patch_version:str, patch_desc: str, username: str, personal: bool, major:int, minor:int, revision:int) -> int:
         sql = "SELECT MAX(PATCH_ID) AS MAX_ID FROM PATCH_HEADER"
         result = self.execute_query(sql)
         patch_id = (result[0]['MAX_ID'] or 0) + 1
@@ -131,11 +131,11 @@ class dbClass:
         """
         self.execute_non_query(sql, {
             'patch_id': patch_id,
-            'patch_name': patch_letter + patch_version,
+            'patch_name': patch_prefixe + patch_version,
             'comments': patch_desc,
             'temp_yn': 'Y' if personal else 'N',
             'user_id': username,
-            'application_id': self.get_application_id(patch_letter),
+            'application_id': self.get_application_id(patch_prefixe),
             'major': major,
             'minor': minor,
             'revision': revision
@@ -143,12 +143,12 @@ class dbClass:
         return patch_id
     
 
-    def update_patch_header(self, patch_id: int, patch_version_letter: str, patch_version: str,comments: str) -> int:
+    def update_patch_header(self, patch_id: int, patch_version_prefixe: str, patch_version: str,comments: str) -> int:
         sql = """
         UPDATE PATCH_HEADER SET NAME = :patch_name, COMMENTS = :comments, CREATION_DATE = SYSDATE
         WHERE PATCH_ID = :patch_id
         """
-        self.execute_non_query(sql, {'patch_name': patch_version_letter + patch_version, 'comments': comments, 'patch_id': patch_id})
+        self.execute_non_query(sql, {'patch_name': patch_version_prefixe + patch_version, 'comments': comments, 'patch_id': patch_id})
         # sql = "DELETE FROM PATCH_DETAIL WHERE PATCH_ID = :patch_id"
         # self.execute_non_query(sql, {'patch_id': patch_id})
         return patch_id

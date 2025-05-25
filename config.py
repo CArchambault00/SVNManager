@@ -2,36 +2,57 @@ import os
 import json
 from tkinter import messagebox
 import datetime as date
+from profiles import get_profile
 
 CONFIG_FILE = "svn_config.json"
 ERROR_LOG_FILE = "SVNManager_error.log"
 SUCCESS_LOG_FILE = "SVNManager_success.log"
-neededVar = ["svn_path", "username", "current_patches"]   # , "instant_client"
-specialvar = ["dsn_name"]
+neededVar = ["username"]  # Only username is required globally
 
 def load_config():
+    # First try to load from active profile
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
-            return json.load(f)
-    return {"svn_path": "", "username": "", "current_patches": "D:/cyframe/jtdev/Patches/Current", "dsn_name" : "CYFRAMEPROD"}   # , "instant_client": ""
+            config = json.load(f)
+            active_profile = config.get("active_profile")
+            if active_profile:
+                profile = get_profile(active_profile)
+                if profile:
+                    return {
+                        "username": config.get("username", ""),
+                        "svn_path": profile.svn_path,
+                        "current_patches": profile.current_patches,
+                        "dsn_name": profile.dsn_name,
+                        "active_profile": active_profile,
+                        "patch_prefix": profile.patch_prefix
+                    }
+            return config
+    return {
+        "username": "",
+        "active_profile": None
+    }
 
 def save_config(data):
+    # Only save username and active_profile in the config file
+    config = {
+        "username": data.get("username", ""),
+        "active_profile": data.get("active_profile")
+    }
     with open(CONFIG_FILE, "w") as f:
-        json.dump(data, f)
+        json.dump(config, f)
 
-def verify_config():
-    config = load_config()
-    for var in neededVar:
-        if not config.get(var):
-            return False
-    return True
-    
 def get_unset_var():
     config = load_config()
     unsetVar = []
-    for var in neededVar:
-        if not config.get(var):
-            unsetVar.append(var)
+    
+    # Check for username
+    if not config.get("username"):
+        unsetVar.append("username")
+    
+    # Check for active profile if username is set
+    if config.get("username") and not config.get("active_profile"):
+        unsetVar.append("active_profile")
+    
     return unsetVar
 
 def verify_config():
@@ -39,19 +60,6 @@ def verify_config():
     if unsetVar:
         raise ValueError(f"The following variables are not set: {', '.join(unsetVar)}")
 
-def _write_log(message: str, log_file: str, include_timestamp: bool = True):
-    """Internal function to write to log files with consistent formatting."""
-    try:
-        with open(log_file, "a", encoding='utf-8') as log:
-            if include_timestamp:
-                timestamp = date.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log.write(f"[{timestamp}] {message}\n")
-            else:
-                log.write(f"{message}\n")
-            log.write("-" * 80 + "\n")  # Separator line for better readability
-    except Exception as e:
-        print(f"Failed to write to log file {log_file}: {e}")
-    
 def log_error(message: str, include_stack: bool = False):
     """
     Log error messages to the error log file.
@@ -76,3 +84,16 @@ def log_success(action: str, details: str = None):
     if details:
         message += f"\nDetails: {details}"
     _write_log(message, SUCCESS_LOG_FILE)
+
+def _write_log(message: str, log_file: str, include_timestamp: bool = True):
+    """Internal function to write to log files with consistent formatting."""
+    try:
+        with open(log_file, "a", encoding='utf-8') as log:
+            if include_timestamp:
+                timestamp = date.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                log.write(f"[{timestamp}] {message}\n")
+            else:
+                log.write(f"{message}\n")
+            log.write("-" * 80 + "\n")  # Separator line for better readability
+    except Exception as e:
+        print(f"Failed to write to log file {log_file}: {e}")

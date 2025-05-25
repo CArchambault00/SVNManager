@@ -2,6 +2,7 @@ from tkinter import filedialog, messagebox, simpledialog
 from config import load_config, save_config, get_unset_var
 import subprocess
 import os
+import tkinter as tk
 
 
 def update_menu_labels(config_menu, menu_bar, index, label, unset_var):
@@ -10,13 +11,12 @@ def update_menu_labels(config_menu, menu_bar, index, label, unset_var):
     menu_bar.entryconfig(1, label="Config ❌" if unset_var else "Config ✔️")
 
 
-def show_messagebox(message_type, title, message):
-    """Helper function to display message boxes."""
-    if message_type == "info":
+def show_messagebox(type, title, message):
+    if type == "info":
         messagebox.showinfo(title, message)
-    elif message_type == "warning":
+    elif type == "warning":
         messagebox.showwarning(title, message)
-    elif message_type == "error":
+    elif type == "error":
         messagebox.showerror(title, message)
 
 
@@ -47,12 +47,32 @@ def set_username(config_menu, menu_bar):
     if username:
         config["username"] = username
         save_config(config)
-        unset_var = get_unset_var()
-        update_menu_labels(config_menu, menu_bar, 0, "Username ✔️", unset_var)
+        
+        # Update menu labels based on correct conditions
+        for i in range(menu_bar.index('end') + 1):
+            try:
+                if 'Profile' in menu_bar.entrycget(i, 'label'):
+                    # Profile status depends on having an active profile
+                    menu_bar.entryconfig(i, label=f"Profile {'✔️' if config.get('active_profile') else '❌'}")
+                elif 'Config' in menu_bar.entrycget(i, 'label'):
+                    # Config status depends only on username
+                    menu_bar.entryconfig(i, label=f"Config ✔️")  # Username is set, so always ✔️
+            except tk.TclError:
+                continue
+                
+        # Update the username entry in config menu
+        config_menu.entryconfig(0, label="Username ✔️")
         show_messagebox("info", "Info", "Username saved successfully!")
     else:
         show_messagebox("warning", "Warning", "Username not set. Some features may not work correctly.")
-        update_menu_labels(config_menu, menu_bar, 0, "Username ❌", get_unset_var())
+        # Update menu labels for failure case
+        for i in range(menu_bar.index('end') + 1):
+            try:
+                if 'Config' in menu_bar.entrycget(i, 'label'):
+                    menu_bar.entryconfig(i, label="Config ❌")  # No username, so ❌
+            except tk.TclError:
+                continue
+        config_menu.entryconfig(0, label="Username ❌")
 
 
 # def validate_instant_client(path):
@@ -161,8 +181,6 @@ def set_dsn_name(config_menu, menu_bar):
     else:
         show_messagebox("warning", "Warning", "DSN name not set. Some features may not work correctly.")
         update_menu_labels(config_menu, menu_bar, 3, "DSN Name ❌", get_unset_var())
-
-import tkinter as tk
 
 def display_patch_files(patche_files, patch_name, patch_description, username, patch_creation_date):
     """Display the patch files in a scrollable window."""

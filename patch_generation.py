@@ -1,5 +1,5 @@
 import os
-from svn_operations import commit_files, get_file_revision_batch
+from svn_operations import commit_files, get_file_head_revision_batch
 from tkinter import messagebox
 import time
 import datetime as date
@@ -8,7 +8,7 @@ from db_handler import dbClass
 from patch_utils import get_md5_checksum_batch, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files_batch
 from config import load_config, verify_config, log_error, log_success
 
-def generate_patch(selected_files, patch_letter, patch_version, patch_description, unlock_files):
+def generate_patch(selected_files, patch_prefixe, patch_version, patch_description, unlock_files):
     db = dbClass()
 
     try:
@@ -16,7 +16,7 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
         config = load_config()
         
         patch_version = patch_version.upper()
-        patch_name = patch_letter + patch_version
+        patch_name = patch_prefixe + patch_version
         patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_name)
 
         svn_path = config.get("svn_path")
@@ -39,18 +39,18 @@ def generate_patch(selected_files, patch_letter, patch_version, patch_descriptio
             commit_files(batch, unlock_files)
         
         db.conn.begin()
-        patch_id = db.create_patch_header(patch_letter, patch_version, patch_description, username, 
+        patch_id = db.create_patch_header(patch_prefixe, patch_version, patch_description, username, 
                                         False, vo.major, vo.minor, vo.revision)
         
         os.makedirs(patch_version_folder, exist_ok=True)
-        application_id = db.get_application_id(patch_letter)
+        application_id = db.get_application_id(patch_prefixe)
         
         # Process files in batches for better performance
         for i in range(0, len(selected_files), BATCH_SIZE):
             batch = selected_files[i:i + BATCH_SIZE]
             
-            # Get file revisions in batch
-            revisions = get_file_revision_batch(batch)
+            # Get file HEAD revisions in batch
+            revisions = get_file_head_revision_batch(batch)
             
             # Calculate MD5 checksums in batch
             md5_checksums = get_md5_checksum_batch([f"{svn_path}/{file}" for file in batch])

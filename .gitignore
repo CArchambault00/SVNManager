@@ -2,6 +2,7 @@ __pycache
 __pycache__
 __pycache__
 svn_config.json
+svn_profiles.json
 dist
 .env
 app.spec
@@ -9,3 +10,4 @@ build
 SVNManager.spec
 instantclient_12_1
 SVNManager.exe
+SVNManager_success.log

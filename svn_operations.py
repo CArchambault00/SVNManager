@@ -307,17 +307,30 @@ def get_file_revision(file):
     results = get_file_revision_batch([file])
     return results.get(file, "")
 
-def get_file_specific_version(file_path, file_folderStruture,file_name,  revision, destination):
+def get_file_specific_version(file_path, file_folderStruture, file_name, revision, destination):
+    """
+    Export a specific version of a file from SVN.
+    
+    Args:
+        file_path: Full path to the file in the working copy
+        file_folderStruture: The folder structure to maintain in the destination
+        file_name: Name of the file
+        revision: SVN revision number to export
+        destination: Base destination directory
+    """
     config = load_config()
     destination_folder = file_folderStruture.replace(file_name, "")
     destination_folder = destination + destination_folder
     if not os.path.isdir(destination_folder):
         os.makedirs(destination_folder, exist_ok=True)
     try:
-        args = ["svn", "export", f"-r{revision}", file_path, destination_folder]
-        subprocess.run(args, capture_output=True, text=True, cwd=config.get("svn_path"), shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+        # Use svn export with specific revision
+        args = ["svn", "export", "-r", str(revision), "--force", file_path, os.path.join(destination_folder, file_name)]
+        result = subprocess.run(args, capture_output=True, text=True, cwd=config.get("svn_path"), shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+        if result.returncode != 0:
+            raise Exception(f"SVN export failed: {result.stderr}")
     except Exception as e:
-        raise Exception(f"Failed to export {file_path} from SVN\nError might be cause by missing SVN command line tool\n\n {e}")
+        raise Exception(f"Failed to export {file_path} revision {revision} from SVN\nError might be caused by missing SVN command line tool\n\n {e}")
     
 def revert_files(selected_files):
     """
@@ -363,3 +376,52 @@ def copy_UnderTestInstallConfig(destination):
         subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Test/UNDERTEST_InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception as e:
         raise Exception(f"Failed to copy UNDERTEST_InstallConfig.exe: {e}")
+
+def get_file_head_revision_batch(files, batch_size=50):
+    """
+    Get SVN HEAD revision numbers for multiple files in batches.
+    Returns a dictionary mapping file paths to revision numbers.
+    """
+    config = load_config()
+    svn_path = config.get("svn_path")
+    results = {}
+    
+    for i in range(0, len(files), batch_size):
+        batch = files[i:i + batch_size]
+        valid_files = []
+        
+        # First check which files exist in SVN
+        for file in batch:
+            file_path = os.path.join(svn_path, file)
+            if os.path.exists(file_path):
+                valid_files.append(file)
+            else:
+                results[file] = ""
+                print(f"Skipping non-existent or system file: {file}")
+        
+        if not valid_files:
+            continue
+            
+        # Process one file at a time for working copy paths
+        for file in valid_files:
+            try:
+                args = ["svn", "info", "--show-item", "last-changed-revision", file]
+                result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+                
+                if result.returncode == 0:
+                    revision = result.stdout.strip()
+                    results[file] = revision
+                else:
+                    print(f"Warning: Could not get HEAD revision for {file}: {result.stderr}")
+                    results[file] = ""
+                    
+            except Exception as e:
+                print(f"Error getting HEAD revision for {file}: {e}")
+                results[file] = ""
+                
+    return results
+
+def get_file_head_revision(file):
+    """Get the HEAD revision for a single file."""
+    results = get_file_head_revision_batch([file])
+    return results.get(file, "")

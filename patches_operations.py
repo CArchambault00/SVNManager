@@ -1,6 +1,6 @@
 # patches_operation.py
 from db_handler import dbClass
-from svn_operations import get_file_specific_version, get_file_info, commit_files, get_file_revision
+from svn_operations import get_file_specific_version, get_file_info, commit_files, get_file_head_revision
 import os
 from config import load_config, verify_config, log_error, log_success
 from patch_generation import create_patch_files_batch
@@ -87,8 +87,6 @@ def build_patch(patch_info):
         patch_id = patch_info["PATCH_ID"]
         files = db.get_patch_file_list(patch_id)
         
-        
-        
         for file in files:
             if file["FOLDER_TYPE"] == '1':
                 file_path = file["PATH"]
@@ -99,12 +97,24 @@ def build_patch(patch_info):
                 file_location = f"{svn_path}/Database{file['PATH']}"
                 destination_folder = f"{patch_version_folder}/DB"
             
-            get_file_specific_version(file_location, file_path, file["NAME"], 
-                                    file["VERSION"], destination_folder)
+            # Get the specific version of the file from SVN
+            get_file_specific_version(
+                file_location,
+                file_path,
+                file["NAME"],
+                file["VERSION"],  # Use the version stored in the database
+                destination_folder
+            )
         
-        create_readme_file(patch_version_folder, patch_info["NAME"], 
-                          patch_info["USER_ID"], str(patch_info["CREATION_DATE"]), 
-                          patch_info["COMMENTS"], files)
+        # Create supporting files with the correct file versions
+        create_readme_file(
+            patch_version_folder,
+            patch_info["NAME"],
+            patch_info["USER_ID"],
+            str(patch_info["CREATION_DATE"]),
+            patch_info["COMMENTS"],
+            files  # Pass the files with their versions from the database
+        )
         
         create_main_sql_file(patch_version_folder, files, patch_name=patch_info["NAME"])
         
@@ -148,7 +158,7 @@ def refresh_patch_files(treeview, patch_info):
             item = treeview.insert('', 'end', values=(f'@locked - {lock_owner}',file["VERSION"], file_path, lock_date))
             treeview.selection_add(item)
 
-def update_patch(selected_files, patch_id, patch_version_letter, patch_version_entry, 
+def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_entry, 
                 patch_description, switch_to_modify_patch_menu, unlock_files):
     verify_config()
     db = dbClass()
@@ -158,7 +168,7 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
 
     patch_version_entry = patch_version_entry.upper()
     
-    patch_name = patch_version_letter + patch_version_entry
+    patch_name = patch_version_prefixe + patch_version_entry
     patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_name)
     try:
         if not selected_files or len(selected_files) == 0:
@@ -170,7 +180,7 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
         commit_files(selected_files,unlock_files)
         
         db.conn.begin()
-        db.update_patch_header(patch_id, patch_version_letter, patch_version_entry, patch_description)
+        db.update_patch_header(patch_id, patch_version_prefixe, patch_version_entry, patch_description)
         db.delete_patch_detail(patch_id)
         
         os.makedirs(patch_version_folder, exist_ok=True)
@@ -178,7 +188,7 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
         for file in selected_files:
             fake_path = '$/Projects/SVN/' + file
             filename = os.path.basename(file)
-            file_id = db.create_patch_detail(patch_id, fake_path, filename, get_file_revision(file))
+            file_id = db.create_patch_detail(patch_id, fake_path, filename, get_file_head_revision(file))
             md5checksum = get_md5_checksum(f"{svn_path}/{file}")
             db.set_md5(patch_id, file_id, md5checksum)
             create_patch_files_batch(file, svn_path, patch_version_folder)
@@ -193,7 +203,7 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
         create_depend_txt(db, patch_version_folder, patch_id)
         
         db.conn.commit()
-        refresh_patches_dict(False, patch_version_letter)
+        refresh_patches_dict(False, patch_version_prefixe)
         full_patch_info = get_full_patch_info(patch_name)
         switch_to_modify_patch_menu(full_patch_info)
         success_details = f"Patch: {patch_name}\nFiles: {len(selected_files)}\nDescription: {patch_description}"
