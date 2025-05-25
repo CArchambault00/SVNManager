@@ -3,7 +3,7 @@ from svn_operations import lock_files, unlock_files
 from version_operation import next_version
 from patches_operations import get_full_patch_info, set_selected_patch, build_patch, view_files_from_patch
 import os
-from svn_operations import get_file_info
+from svn_operations import get_file_info, get_file_info_batch
 from config import load_config
 
 def lock_selected_files(files_listbox):
@@ -32,54 +32,75 @@ def select_all_files(event, files_listbox):
         files_listbox.selection_add(item)
 
 def check_files_is_present(files_listbox, files):
-    for file in files:
-        for item in files_listbox.get_children():
-            if files_listbox.item(item, "values")[2] == file:
-                return True
+    # Create a set of existing files for O(1) lookup
+    existing_files = {files_listbox.item(item, "values")[2] for item in files_listbox.get_children()}
+    return any(file in existing_files for file in files)
 
 def handle_drop(event, listbox):
     files = listbox.tk.splitlist(event.data)
     config = load_config()
     svn_path = config.get("svn_path")
     files_outside_svn = []
+    files_to_process = []
+    
+    # First pass: collect all files to process
     for file in files:
         if os.path.isfile(file):
             if file.startswith(svn_path):
-                file = file.replace("\\", "/")
-                file = file.replace(svn_path + "/", "")
-                if not check_files_is_present(listbox, [file]):
-                    lock_by_user, lock_owner, revision, lock_date = get_file_info(file)
-                    if lock_by_user:
-                        listbox.insert('', 'end', values=('locked',revision, file, lock_date))
-                    elif lock_by_user== False and lock_owner == "":
-                        listbox.insert('', 'end', values=('unlocked',revision, file, lock_date))
-                    else:
-                        add_file = tk.messagebox.askyesno("File is locked", f"The file {file} is locked by {lock_owner}. Do you want to add it anyway?")
-                        if add_file:
-                            listbox.insert('', 'end', values=(f'@locked - {lock_owner}',revision, file, lock_date))
+                file = file.replace("\\", "/").replace(svn_path + "/", "")
+                files_to_process.append(file)
             else:
                 files_outside_svn.append(file)
-        if os.path.isdir(file):
-            for root, dirs, files in os.walk(file):
-                for file in files:
-                    file = os.path.join(root, file)
-                    if file.startswith(svn_path):
-                        file = file.replace("\\", "/")
-                        file = file.replace(svn_path + "/", "")
-                        if not check_files_is_present(listbox, [file]):
-                            lock_by_user, lock_owner,revision,lock_date = get_file_info(file)
-                            if lock_by_user:
-                                listbox.insert('', 'end', values=('locked',revision, file,lock_date))
-                            elif lock_by_user== False and lock_owner == "":
-                                listbox.insert('', 'end', values=('unlocked',revision, file,lock_date))
-                            else:
-                                add_file = tk.messagebox.askyesno("File is locked", f"The file {file} is locked by {lock_owner}. Do you want to add it to the patch anyway?")
-                                if add_file:
-                                    listbox.insert('', 'end', values=(f'@locked - {lock_owner}',revision, file,lock_date))
+        elif os.path.isdir(file):
+            for root, dirs, dir_files in os.walk(file):
+                for dir_file in dir_files:
+                    full_path = os.path.join(root, dir_file)
+                    if full_path.startswith(svn_path):
+                        file_path = full_path.replace("\\", "/").replace(svn_path + "/", "")
+                        files_to_process.append(file_path)
                     else:
-                        files_outside_svn.append(file)
+                        files_outside_svn.append(full_path)
+
+    # Get existing files to avoid duplicates
+    existing_files = {listbox.item(item, "values")[2] for item in listbox.get_children()}
+    new_files = [f for f in files_to_process if f not in existing_files]
+    
+    if not new_files:
+        return
+        
+    # Process all files in one batch call
+    file_info_results = get_file_info_batch(new_files)
+    
+    # Insert files in batches to update UI periodically
+    BATCH_SIZE = 100
+    for i in range(0, len(new_files), BATCH_SIZE):
+        batch = new_files[i:i + BATCH_SIZE]
+        for file in batch:
+            info = file_info_results.get(file, (False, "", "", ""))
+            lock_by_user, lock_owner, revision, lock_date = info
+            
+            if lock_by_user:
+                listbox.insert('', 'end', values=('locked', revision, file, lock_date))
+            elif not lock_by_user and lock_owner == "":
+                listbox.insert('', 'end', values=('unlocked', revision, file, lock_date))
+            else:
+                # For locked files by others, add without prompting to avoid dialog spam
+                listbox.insert('', 'end', values=(f'@locked - {lock_owner}', revision, file, lock_date))
+        
+        # Update the UI periodically
+        listbox.update()
+
     if files_outside_svn:
-        tk.messagebox.showerror("Error", "The following files are not in the SVN repository and will not be added to the patch: \n" + "\n".join(files_outside_svn))
+        # Show only first 100 files in error message to avoid huge dialogs
+        files_to_show = files_outside_svn[:100]
+        remaining = len(files_outside_svn) - len(files_to_show)
+        
+        error_message = "The following files are not in the SVN repository and will not be added to the patch:\n"
+        error_message += "\n".join(files_to_show)
+        if remaining > 0:
+            error_message += f"\n\n...and {remaining} more files"
+            
+        tk.messagebox.showerror("Error", error_message)
 
 def modify_patch(selected_patch, switch_to_modify_patch_menu):
     if selected_patch:

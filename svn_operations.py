@@ -1,7 +1,7 @@
 # svn_operations.py
 import subprocess
 from tkinter import messagebox
-from config import load_config, verify_config
+from config import load_config, verify_config, log_error, log_success
 import xml.etree.ElementTree as ET
 import os
 import re
@@ -13,7 +13,7 @@ def lock_files(selected_files, patch_listbox):
 def unlock_files(selected_files, patch_listbox):
     _lock_unlock_files(selected_files, patch_listbox, lock=False)
 
-def _lock_unlock_files(selected_files, patch_listbox, lock=True):
+def _lock_unlock_files(selected_files, patch_listbox, lock=True, batch_size=50):
     try:
         verify_config()
         config = load_config()
@@ -25,41 +25,44 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True):
             return
 
         command = "lock" if lock else "unlock"
-        base_command = ["svn", command]
+        base_args = ["svn", command]
 
         if lock:
             lock_message = f"Locking by {username}"
-            base_command += ["--message", lock_message]
+            base_args += ["--message", lock_message]
 
-        base_command += selected_files
+        locked_by_others = []
+        must_update_files = []
 
-        result = subprocess.run(
-            base_command,
-            cwd=svn_path,
-            capture_output=True,
-            text=True,
-            shell=False,
-            creationflags=subprocess.CREATE_NO_WINDOW
-        )
-        
-        if result.returncode != 0:
-            stderr = result.stderr
-            locked_by_others = []
-            must_update_files = []
+        # Process files in batches
+        for i in range(0, len(selected_files), batch_size):
+            batch = selected_files[i:i + batch_size]
+            args = base_args + batch
+            
+            result = subprocess.run(
+                args,
+                cwd=svn_path,
+                capture_output=True,
+                text=True,
+                shell=False,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            
+            if result.returncode != 0:
+                stderr = result.stderr
+                
+                # Match standard "already locked" errors
+                matches = re.findall(r"Path '(/.*?)' is already locked by user '(.*?)'", stderr)
+                for path, user in matches:
+                    if user != username:
+                        locked_by_others.append((path, user))
 
-            # Match standard "already locked" errors
-            matches = re.findall(r"Path '(/.*?)' is already locked by user '(.*?)'", stderr)
-            for path, user in matches:
-                if user != username:
-                    locked_by_others.append((path, user))
+                # Match W160042: Lock failed errors for "newer version exists"
+                matches_alt = re.findall(r"W160042: Lock failed: newer version of '(.*?)' exists", stderr)
+                must_update_files.extend(matches_alt)
 
-            # Match W160042: Lock failed errors for "newer version exists"
-            matches_alt = re.findall(r"W160042: Lock failed: newer version of '(.*?)' exists", stderr)
-            for path in matches_alt:
-                must_update_files.append(path.strip())
-
+        if locked_by_others or must_update_files:
             messages = []
-
             if locked_by_others:
                 locked_msg = "\n".join(f"{file:<35} -> locked by {user}" for file, user in locked_by_others)
                 messages.append(f"The following files could not be locked:\n\n{locked_msg}")
@@ -68,14 +71,17 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True):
                 update_msg = "\n".join(f"{file:<35} -> must updated" for file in must_update_files)
                 messages.append(f"The following files have newer versions:\n\n{update_msg}")
 
-            if messages:
-                raise Exception("Lock/Unlock failed:\n" + "\n".join(messages))
-            else:
-                raise Exception("Lock/Unlock failed:\n" + "\n".join(stderr.splitlines()))
-        else:
-            messagebox.showinfo("Success", f"Files {'locked' if lock else 'unlocked'} successfully!")
+            error_msg = "Lock/Unlock failed:\n" + "\n".join(messages)
+            log_error(error_msg)
+            raise Exception(error_msg)
+
+        success_details = f"Action: {'Lock' if lock else 'Unlock'}\nFiles: {len(selected_files)}\nUser: {username}"
+        log_success("SVN Lock Operation", success_details)
+        messagebox.showinfo("Success", f"Files {'locked' if lock else 'unlocked'} successfully!")
     except Exception as e:
-        messagebox.showerror("Error", f"Failed to {'lock' if lock else 'unlock'} files.\n\n{e}")
+        error_msg = f"Failed to {'lock' if lock else 'unlock'} files.\n\n{e}"
+        log_error(error_msg, include_stack=True)
+        messagebox.showerror("Error", error_msg)
 
     refresh_locked_files(patch_listbox)
     
@@ -120,11 +126,12 @@ def refresh_locked_files(files_listbox):
                         lock_date = dt_local.strftime("%Y-%m-%d %H:%M:%S")
                     else:
                         lock_date = ""
-                    files_listbox.insert(
+                    item = files_listbox.insert(
                         "", "end",
                         values=("locked", revision, path, lock_date),
                         tags=("unchecked",)
                     )
+                    files_listbox.selection_add(item)  # Select the item
                     break
 
     except ET.ParseError as e:
@@ -132,89 +139,173 @@ def refresh_locked_files(files_listbox):
     except Exception as e:
         messagebox.showerror("Error", f"Failed to load locked files:\n{e}")
 
-def commit_files(selected_files, unlock_files):
+def commit_files_batch(selected_files, unlock_files, batch_size=50):
+    """Commit files in batches to avoid command line length limits."""
     config = load_config()
     username = config.get("username")
     svn_path = config.get("svn_path")
-    print(unlock_files)
-    if selected_files:
-        args = [
-            "svn", "commit",
-            "--username", username,
-            "--message", f"Committed by {username}",
-        ]
+    
+    if not selected_files:
+        return
+        
+    base_args = [
+        "svn", "commit",
+        "--username", username,
+        "--message", f"Committed by {username}",
+    ]
+    
+    if unlock_files == False:
+        base_args.append("--no-unlock")
+    
+    try:
+        for i in range(0, len(selected_files), batch_size):
+            batch = selected_files[i:i + batch_size]
+            args = base_args + batch
+            result = subprocess.run(args, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+            if result.returncode != 0:
+                raise Exception(result.stderr)
+        
+        success_details = f"Files: {len(selected_files)}\nUser: {username}\nUnlock after commit: {unlock_files}"
+        log_success("SVN Commit", success_details)
+    except Exception as e:
+        error_msg = f"Failed to commit files batch: {e}"
+        log_error(error_msg, include_stack=True)
+        raise Exception(error_msg)
 
-        # Add unlock flag based on condition
-        if unlock_files == False:
-            args.append("--no-unlock")
+def commit_files(selected_files, unlock_files):
+    """Wrapper for backward compatibility."""
+    return commit_files_batch(selected_files, unlock_files)
 
-        # Add the files to commit
-        args.extend(selected_files)
-        print(args)
-        try:
-            subprocess.run(args, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
-        except Exception as e:
-            raise Exception(f"Failed to commit files\nError might be cause by missing SVN command line tool\n\n {e}")
+def get_file_info_batch(files, batch_size=50):
+    """
+    Get SVN info for multiple files in batches.
+    Returns a dictionary mapping file paths to (is_lock_by_user, lock_owner, revision, lock_date) tuples.
+    """
+    config = load_config()
+    username = config.get("username")
+    svn_path = config.get("svn_path")
+    results = {}
+
+    # Process files in batches
+    for i in range(0, len(files), batch_size):
+        batch = files[i:i + batch_size]
+        valid_files = []
+        
+        # First check which files exist in SVN
+        for file in batch:
+            file_path = os.path.join(svn_path, file)
+            if os.path.exists(file_path):
+                valid_files.append(file)
+            else:
+                results[file] = (False, "", "", "")
+                print(f"Skipping non-existent or system file: {file}")
+        
+        if not valid_files:
+            continue
+            
+        # Process one file at a time for working copy paths
+        for file in valid_files:
+            try:
+                args = ["svn", "info", "--xml", file]
+                result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+                
+                if result.returncode == 0:
+                    root = ET.fromstring(result.stdout)
+                    entry = root.find(".//entry")
+                    if entry is not None:
+                        revision = entry.get("revision", "")
+                        
+                        lock = entry.find(".//lock")
+                        if lock is not None:
+                            lock_owner = lock.findtext("owner", "")
+                            created_str = lock.findtext("created", "")
+                            if created_str:
+                                try:
+                                    dt = datetime.strptime(created_str.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+                                    lock_date = dt.strftime("%Y-%m-%d %H:%M:%S")
+                                except:
+                                    lock_date = ""
+                            else:
+                                lock_date = ""
+                            
+                            is_lock_by_user = lock_owner == username
+                        else:
+                            lock_owner = ""
+                            lock_date = ""
+                            is_lock_by_user = False
+                        
+                        results[file] = (is_lock_by_user, lock_owner, revision, lock_date)
+                    else:
+                        results[file] = (False, "", "", "")
+                else:
+                    print(f"Warning: Could not get info for {file}: {result.stderr}")
+                    results[file] = (False, "", "", "")
+                    
+            except ET.ParseError:
+                print(f"Warning: XML parsing error for {file}")
+                results[file] = (False, "", "", "")
+            except Exception as e:
+                print(f"Error getting info for {file}: {e}")
+                results[file] = (False, "", "", "")
+
+    return results
 
 def get_file_info(file):
+    """
+    Get SVN info for a single file.
+    For backward compatibility, wraps get_file_info_batch.
+    """
+    results = get_file_info_batch([file])
+    return results.get(file, (False, "", "", ""))
+
+def get_file_revision_batch(files, batch_size=50):
+    """
+    Get SVN revision numbers for multiple files in batches.
+    Returns a dictionary mapping file paths to revision numbers.
+    """
     config = load_config()
-    username = config.get("username")
     svn_path = config.get("svn_path")
-
-    file_on_svn = "svn://10.31.10.249/" + file
-
-    args = ["svn", "info", file_on_svn]
-    try:
-        result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
-        # Extract revision  
-        revision = ""
-        if "Revision: " in result.stdout:
+    results = {}
+    
+    for i in range(0, len(files), batch_size):
+        batch = files[i:i + batch_size]
+        valid_files = []
+        
+        # First check which files exist in SVN
+        for file in batch:
+            file_path = os.path.join(svn_path, file)
+            if os.path.exists(file_path):
+                valid_files.append(file)
+            else:
+                results[file] = ""
+                print(f"Skipping non-existent or system file: {file}")
+        
+        if not valid_files:
+            continue
+            
+        # Process one file at a time for working copy paths
+        for file in valid_files:
             try:
-                revision = result.stdout.split("Revision: ")[1].split("\n")[0].strip()
-            except IndexError:
-                revision = ""
-
-        # Extract lock owner
-        lock_owner = ""
-        if "Lock Owner: " in result.stdout:
-            try:
-                lock_owner = result.stdout.split("Lock Owner: ")[1].split("\n")[0].strip()
-            except IndexError:
-                lock_owner = ""
-        lock_date = ""
-        if "Lock Created: " in result.stdout:
-            try:
-                created_str = result.stdout.split("Lock Created: ")[1].split("\n")[0].strip()
-                trimmed = created_str.split(" ")[0] + " " + created_str.split(" ")[1]
-                dt = datetime.strptime(trimmed, "%Y-%m-%d %H:%M:%S")
-                lock_date = dt.strftime("%Y-%m-%d %H:%M:%S")
-            except IndexError:
-                lock_date = ""
-
-        # Determine if the lock is by the current user
-        is_lock_by_user = lock_owner == username
-
-        # Always return a tuple (is_lock_by_user, lock_owner, revision)
-        return (is_lock_by_user, lock_owner, revision, lock_date)
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to get {file} info from SVN\nError might be cause by missing SVN command line tool\n\n {e}")
-        return (False, "", "")
+                args = ["svn", "info", "--show-item", "revision", file]
+                result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+                
+                if result.returncode == 0:
+                    revision = result.stdout.strip()
+                    results[file] = revision
+                else:
+                    print(f"Warning: Could not get revision for {file}: {result.stderr}")
+                    results[file] = ""
+                    
+            except Exception as e:
+                print(f"Error getting revision for {file}: {e}")
+                results[file] = ""
+                
+    return results
 
 def get_file_revision(file):
-    config = load_config()
-    svn_path = config.get("svn_path")
-    
-    # Run the SVN log command to get the latest revision number
-    try:
-        args = ["svn", "log", "-l", "1", file]
-        result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
-        log_output = result.stdout
-        revision_line = log_output.splitlines()[1]  # The second line contains the revision info
-        revision_number = revision_line.split()[0].strip('r')
-        return revision_number
-    except Exception as e:
-        raise Exception(f"Failed to get file revision! For file: {file}\nError might be cause by missing SVN command line tool\n\n {e}")
-    
+    """Wrapper for backward compatibility."""
+    results = get_file_revision_batch([file])
+    return results.get(file, "")
 
 def get_file_specific_version(file_path, file_folderStruture,file_name,  revision, destination):
     config = load_config()
@@ -256,7 +347,7 @@ def copy_InstallConfig(destination):
         raise Exception(f"Failed to copy InstallConfig.exe from SVN: {e}")
 
 def copy_RunScript(destination):
-    # Copy RunScript.exe from the remote SVN Tools/Misc Tools/RunScript folder to the local destination
+    # Copy RunScript.exe from the remote SVN Tools/Misc Tools/InstallConfig folder to the local destination
     config = load_config()
     svn_path = config.get("svn_path")
     try:

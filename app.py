@@ -100,6 +100,7 @@ def switch_to_modify_patch_menu(patch_details):
     neededVar = get_unset_var()
     if neededVar:
         messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
+        
 def check_latest_version(root):
     random_number = random.randint(1, 1000000)
     url = f"https://raw.githubusercontent.com/CArchambault00/SVNManager/main/latest_version.txt?nocache={random_number}"

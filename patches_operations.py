@@ -2,8 +2,8 @@
 from db_handler import dbClass
 from svn_operations import get_file_specific_version, get_file_info, commit_files, get_file_revision
 import os
-from config import load_config, verify_config, log_error
-from patch_generation import create_patch_files
+from config import load_config, verify_config, log_error, log_success
+from patch_generation import create_patch_files_batch
 import tkinter as tk
 import time
 from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file
@@ -76,7 +76,7 @@ def get_selected_patch():
 
 def build_patch(patch_info):
     config = load_config()
-    print(patch_info)
+    
     patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_info["NAME"])
     os.makedirs(patch_version_folder, exist_ok=True)
     try:
@@ -139,11 +139,14 @@ def refresh_patch_files(treeview, patch_info):
             file_path = 'Database' + file["PATH"]
         lock_by_user,lock_owner,svn_revision, lock_date = get_file_info(file_path)
         if lock_by_user:
-            treeview.insert('', 'end', values=('locked',file["VERSION"], file_path, lock_date))
+            item = treeview.insert('', 'end', values=('locked',file["VERSION"], file_path, lock_date))
+            treeview.selection_add(item)
         elif lock_by_user== False and lock_owner == "":
-            treeview.insert('', 'end', values=('unlocked',file["VERSION"], file_path, lock_date))
+            item = treeview.insert('', 'end', values=('unlocked',file["VERSION"], file_path, lock_date))
+            treeview.selection_add(item)
         else:
-            treeview.insert('', 'end', values=(f'@locked - {lock_owner}',file["VERSION"], file_path, lock_date))
+            item = treeview.insert('', 'end', values=(f'@locked - {lock_owner}',file["VERSION"], file_path, lock_date))
+            treeview.selection_add(item)
 
 def update_patch(selected_files, patch_id, patch_version_letter, patch_version_entry, 
                 patch_description, switch_to_modify_patch_menu, unlock_files):
@@ -178,14 +181,13 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
             file_id = db.create_patch_detail(patch_id, fake_path, filename, get_file_revision(file))
             md5checksum = get_md5_checksum(f"{svn_path}/{file}")
             db.set_md5(patch_id, file_id, md5checksum)
-            create_patch_files(file, svn_path, patch_version_folder)
+            create_patch_files_batch(file, svn_path, patch_version_folder)
         
         create_readme_file(patch_version_folder, patch_name, username, 
                          time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)
         
         create_main_sql_file(patch_version_folder, selected_files,
                            patch_name=patch_name)
-        
         
         setup_patch_folder(patch_version_folder)
         create_depend_txt(db, patch_version_folder, patch_id)
@@ -194,14 +196,15 @@ def update_patch(selected_files, patch_id, patch_version_letter, patch_version_e
         refresh_patches_dict(False, patch_version_letter)
         full_patch_info = get_full_patch_info(patch_name)
         switch_to_modify_patch_menu(full_patch_info)
+        success_details = f"Patch: {patch_name}\nFiles: {len(selected_files)}\nDescription: {patch_description}"
+        log_success("Patch Update", success_details)
         tk.messagebox.showinfo("Success", "Patch updated successfully!")
     except Exception as e:
         db.conn.rollback()
         cleanup_files(patch_version_folder)
-        tk.messagebox.showerror("Error", f"Failed to update patch: {e}")
-        log_error(f"Failed to update patch: {str(e)}")
-        log_error(f"Date:" + date.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        log_error(f"------------------------------")
+        error_msg = f"Failed to update patch: {str(e)}"
+        log_error(error_msg, include_stack=True)
+        tk.messagebox.showerror("Error", error_msg)
 
 def view_files_from_patch(patch_info):
     ## Show files from the patch in a dialog

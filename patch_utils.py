@@ -2,8 +2,9 @@ import hashlib
 from tkinter import messagebox
 import shutil
 import os
-from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision
+from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision, get_file_revision_batch
 from db_handler import dbClass
+import time
 
 def get_md5_checksum(file_path):
     """Returns the MD5 checksum of a given file."""
@@ -18,13 +19,48 @@ def get_md5_checksum(file_path):
         raise Exception(f"Error calculating MD5 checksum for {file_path}: {e}")
     
 def cleanup_files(patch_version_folder):
-    if os.path.exists(patch_version_folder):
-        shutil.rmtree(patch_version_folder)
+    """Clean up patch files with retry logic and proper error handling."""
+    if not os.path.exists(patch_version_folder):
+        return
+        
+    def handle_error(func, path, exc_info):
+        """Error handler for shutil.rmtree."""
+        import stat
+        import time
+        
+        # If permission error, try to make file writable and retry
+        if isinstance(exc_info[1], PermissionError):
+            try:
+                # Make file writable
+                os.chmod(path, stat.S_IWRITE)
+                # Wait a moment
+                time.sleep(0.1)
+                # Try again
+                func(path)
+            except Exception as e:
+                print(f"Warning: Could not remove {path}: {e}")
+        else:
+            print(f"Warning: Could not remove {path}: {exc_info[1]}")
+    
+    max_retries = 3
+    retry_delay = 0.5  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            shutil.rmtree(patch_version_folder, onerror=handle_error)
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Retry {attempt + 1}/{max_retries} cleaning up {patch_version_folder}: {e}")
+                time.sleep(retry_delay)
+            else:
+                print(f"Warning: Could not fully clean up {patch_version_folder}: {e}")
 
 def create_depend_txt(db_handler, patch_version_folder, patch_id):
     try:
         patch_files = db_handler.get_patch_file_list(patch_id)
-        depend_content = ""
+        depend_content = set()  # Use a set to avoid duplicates
+        
         for file_info in patch_files:
             folder_path = ""
 
@@ -34,24 +70,30 @@ def create_depend_txt(db_handler, patch_version_folder, patch_id):
                 folder_path = "$/Projects/SVN/Database" + file_info['PATH']
 
             file_name = file_info['NAME']
-            current_version = file_info['VERSION']
+            current_version = file_info.get('VERSION')
+            if current_version is None:
+                continue
+                
             # Get previous versions of this file from other patches
             previous_versions = db_handler.get_folder_patch_list(folder_path)
             
             # Filter for this specific file with versions < current version
-            previous_versions = [pv for pv in previous_versions 
-                            if pv['NAME'] == file_name 
-                            and pv['VERSION'] < current_version 
-                            and pv['DELETED_YN'] == 'N']
-            
             for pv in previous_versions:
-                # Extract build number from patch name
-                build_number = extract_build_number(pv['PATCH_NAME'])
-                if build_number != "'ERROR',3,0,0":
-                    depend_content += f"{build_number}\n"
+                if (pv['NAME'] == file_name and 
+                    pv['DELETED_YN'] == 'N' and 
+                    pv.get('VERSION') is not None and 
+                    current_version is not None and
+                    float(pv['VERSION']) < float(current_version)):
+                    
+                    # Extract build number from patch name
+                    build_number = extract_build_number(pv['PATCH_NAME'])
+                    if build_number != "'ERROR',3,0,0":
+                        depend_content.add(build_number)
+        
         if depend_content:
-            with open(patch_version_folder + "/depend.txt", 'w') as f:
-                f.write(depend_content)
+            with open(os.path.join(patch_version_folder, "depend.txt"), 'w') as f:
+                f.write('\n'.join(sorted(depend_content)))
+                
     except Exception as e:
         raise Exception(f"Error creating depend.txt: {e}")
 
@@ -138,67 +180,101 @@ def create_patch_files(file, svn_path, patch_version_folder):
 def create_readme_file(patch_version_folder, patch_name, username, creation_date, patch_description, files):
     """Create a ReadMe.txt file with patch information."""
     try:
+        # Pre-process files to avoid multiple iterations
+        webpage_files = []
+        database_files = []
+        
+        # Get file revisions in batch if they're strings
+        str_files = [f for f in files if isinstance(f, str)]
+        if str_files:
+            revisions = get_file_revision_batch(str_files)
+        
+        for file in files:
+            if isinstance(file, dict):
+                if file["FOLDER_TYPE"] == '1':
+                    webpage_files.append(f"webpage{file['PATH']} ({file['VERSION']})")
+                else:
+                    database_files.append(f"Database{file['PATH']} ({file['VERSION']})")
+            else:
+                revision = revisions.get(file, "unknown")
+                if file.startswith("webpage"):
+                    webpage_files.append(f"{file} ({revision})")
+                else:
+                    database_files.append(f"{file} ({revision})")
+
+        # Write everything in one go
+        content = [
+            f"Patch {patch_name}",
+            username,
+            creation_date,
+            "",
+            patch_description,
+            "\nPatch Content:\n",
+            "\nWebpage Files:",
+            *webpage_files,
+            "\nDatabase Files:",
+            *database_files
+        ]
+        
         with open(os.path.join(patch_version_folder, "ReadMe.txt"), "w") as readme:
-            readme.write(f"Patch {patch_name}\n")
-            readme.write(f"{username}\n")
-            readme.write(f"{creation_date}\n\n")
-            readme.write(patch_description)
-            readme.write("\n\nPatch Content:\n\n")
+            readme.write("\n".join(content))
             
-            webpage_files = [file for file in files if isinstance(file, dict) and file["FOLDER_TYPE"] == '1' or 
-                            isinstance(file, str) and file.startswith("webpage")]
-            database_files = [file for file in files if isinstance(file, dict) and file["FOLDER_TYPE"] == '2' or 
-                            isinstance(file, str) and not file.startswith("webpage")]
-            
-            readme.write("Webpage Files:\n")
-            for file in webpage_files:
-                if isinstance(file, dict):
-                    readme.write(f"webpage{file['PATH']} ({file['VERSION']})\n")
-                else:
-                    readme.write(f"{file} ({get_file_revision(file)})\n")
-            
-            readme.write("\nDatabase Files:\n")
-            for file in database_files:
-                if isinstance(file, dict):
-                    readme.write(f"Database{file['PATH']} ({file['VERSION']})\n")
-                else:
-                    readme.write(f"{file} ({get_file_revision(file)})\n")
     except Exception as e:
         raise Exception(f"Error creating ReadMe.txt: {e}")
 
 def create_main_sql_file(patch_version_folder, files, patch_name=None, version_info=None, application_id=None):
     """Create MainSQL.sql file with SQL commands."""
     try:
+        # Pre-process files to avoid multiple iterations
+        sql_commands = ["prompt &&HOST", "prompt &&PERSON", "set echo on\n"]
+        
+        for file in files:
+            if isinstance(file, dict) and file["FOLDER_TYPE"] == '2':
+                schema = file["PATH"].split("/")[1]
+                file_path = 'DB' + file["PATH"].replace("Database", "DB").replace("StoredProcedures", "SP")
+                sql_commands.extend(_generate_sql_commands(file_path, schema))
+            elif isinstance(file, str) and file.startswith("Database"):
+                file_path = file.replace("Database", "DB").replace("StoredProcedures", "SP")
+                schema = file.split("/")[1]
+                sql_commands.extend(_generate_sql_commands(file_path, schema))
+        
+        sql_commands.extend([
+            "set echo on",
+            "connect CMATC/CMATC@&&HOST"
+        ])
+        
+        if version_info:
+            major, minor, revision = version_info
+            sql_commands.append(
+                f"CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION('{application_id}',{major},{minor},{revision},'&&PERSON');"
+            )
+        elif patch_name:
+            version = extract_build_number(patch_name)
+            application_id, major, minor, revision = version.split(",")
+            sql_commands.append(
+                f"CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION({application_id},{major},{minor},{revision},'&&PERSON');"
+            )
+        
+        sql_commands.extend(["commit;", "\nexit;"])
+        
         with open(os.path.join(patch_version_folder, "MainSQL.sql"), "w") as main_sql:
-            main_sql.write("prompt &&HOST\n")
-            main_sql.write("prompt &&PERSON\n")
-            main_sql.write("set echo on\n\n")
+            main_sql.write("\n".join(sql_commands))
             
-            for file in files:
-                if isinstance(file, dict) and file["FOLDER_TYPE"] == '2':
-                    schema = file["PATH"].split("/")[1]
-                    file_path = 'DB' + file["PATH"].replace("Database", "DB").replace("StoredProcedures", "SP")
-                    write_sql_commands(main_sql, file_path, schema)
-                elif isinstance(file, str) and file.startswith("Database"):
-                    file_path = file.replace("Database", "DB")
-                    file_path = file_path.replace("StoredProcedures", "SP")
-                    schema = file.split("/")[1]
-                    write_sql_commands(main_sql, file_path, schema)
-            
-            main_sql.write("set echo on\n")
-            main_sql.write("connect CMATC/CMATC@&&HOST\n")
-            
-            if version_info:
-                major, minor, revision = version_info
-                main_sql.write(f"CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION('{application_id}',{major},{minor},{revision},'&&PERSON');\n")
-            elif patch_name:
-                version = extract_build_number(patch_name)
-                application_id, major, minor, revision = version.split(",") # Application_id is already in the format 'APP_ID'
-                main_sql.write(f"CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION({application_id},{major},{minor},{revision},'&&PERSON');\n")
-            
-            main_sql.write("commit;\n\nexit;\n")
     except Exception as e:
         raise Exception(f"Error creating MainSQL.sql: {e}")
+
+def _generate_sql_commands(file_path, schema):
+    """Helper function to generate SQL commands for a file."""
+    return [
+        "set scan on",
+        f"connect {schema}/{schema}@&&HOST" if schema else "#WARNING connect schema/schema@&&HOST",
+        "set scan off",
+        "set echo off",
+        f'prompt Loading "{file_path}" ...',
+        f'@@"{file_path}"',
+        "show error",
+        "set echo on\n"
+    ]
 
 def setup_patch_folder(patch_version_folder):
     """Set up the patch folder with required files."""
@@ -208,3 +284,57 @@ def setup_patch_folder(patch_version_folder):
         copy_UnderTestInstallConfig(patch_version_folder)
     except Exception as e:
         raise e
+
+def get_md5_checksum_batch(files):
+    """Returns MD5 checksums for multiple files in a batch."""
+    results = {}
+    for file_path in files:
+        try:
+            md5_hash = hashlib.md5()
+            with open(file_path, "rb") as f:
+                for chunk in iter(lambda: f.read(4096), b""):
+                    md5_hash.update(chunk)
+            results[file_path] = md5_hash.hexdigest()
+        except Exception as e:
+            results[file_path] = None
+            print(f"Error calculating MD5 for {file_path}: {e}")
+    return results
+
+def create_patch_files_batch(files, svn_path, patch_version_folder):
+    """Create patch files in batches to optimize I/O operations."""
+    web_files = []
+    db_files = []
+    
+    # First, categorize files
+    for file in files:
+        file_path_no_svn = file
+        if file_path_no_svn.startswith("webpage"):
+            web_files.append((
+                file_path_no_svn,
+                file_path_no_svn.replace("webpage", "Web"),
+                f"{svn_path}/{file_path_no_svn}"
+            ))
+        elif file_path_no_svn.startswith("Database"):
+            sql_path = file_path_no_svn.replace("Database", "DB").replace("StoredProcedures", "SP")
+            db_files.append((
+                file_path_no_svn,
+                sql_path,
+                f"{svn_path}/{file_path_no_svn}"
+            ))
+
+    # Create directories in bulk
+    directories = set()
+    for _, dest_path, _ in web_files + db_files:
+        directories.add(os.path.dirname(os.path.join(patch_version_folder, dest_path)))
+    
+    for directory in directories:
+        os.makedirs(directory, exist_ok=True)
+
+    # Copy files in batches
+    for file_info in web_files + db_files:
+        try:
+            _, dest_path, src_location = file_info
+            dest_file = os.path.join(patch_version_folder, dest_path)
+            shutil.copy2(src_location, dest_file)
+        except Exception as e:
+            raise Exception(f"Error creating patch files for {file_info[0]}: {e}")
