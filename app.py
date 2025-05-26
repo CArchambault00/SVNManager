@@ -43,7 +43,24 @@ def create_main_layout(root):
     return top_frame, bottom_left_frame, bottom_right_frame
 
 
+def check_requirements():
+    config = load_config()
+    messages = []
+    
+    if not config.get("username"):
+        messages.append("Please set your username in the Config menu")
+    if not config.get("active_profile"):
+        messages.append("Please select or create a profile in the Profile menu")
+        
+    if messages:
+        messagebox.showwarning("Setup Required", "\n".join(messages))
+        return False
+    return True
+
 def switch_to_lock_unlock_menu():
+    if not check_requirements():
+        return
+        
     for widget in root.winfo_children():
         if not isinstance(widget, tk.Menu):
             widget.destroy()
@@ -52,11 +69,11 @@ def switch_to_lock_unlock_menu():
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame(bottom_right_frame, files_listbox)
     refresh_locked_files(files_listbox)
-    neededVar = get_unset_var()
-    if neededVar:
-        messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
 
 def switch_to_patch_menu():
+    if not check_requirements():
+        return
+        
     for widget in root.winfo_children():
         if not isinstance(widget, tk.Menu):
             widget.destroy()
@@ -65,11 +82,11 @@ def switch_to_patch_menu():
     files_listbox = create_file_listbox(bottom_left_frame)
     create_button_frame_patch(bottom_right_frame, files_listbox)
     refresh_locked_files(files_listbox)
-    neededVar = get_unset_var()
-    if neededVar:
-        messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
 
 def switch_to_patches_menu():
+    if not check_requirements():
+        return
+        
     config = load_config()
     for widget in root.winfo_children():
         if not isinstance(widget, tk.Menu):
@@ -83,11 +100,10 @@ def switch_to_patches_menu():
     username = config.get("username")
     refresh_patches(patches_listbox, False, "S", username)  # Populate the Treeview with patches
 
-    neededVar = get_unset_var()
-    if neededVar:
-        messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
-
 def switch_to_modify_patch_menu(patch_details):
+    if not check_requirements():
+        return
+        
     for widget in root.winfo_children():
         if not isinstance(widget, tk.Menu):
             widget.destroy()
@@ -97,10 +113,6 @@ def switch_to_modify_patch_menu(patch_details):
     create_button_frame_modify_patch(bottom_right_frame, files_listbox, patch_details,switch_to_modify_patch_menu)
     refresh_patch_files(files_listbox, patch_details)
 
-    neededVar = get_unset_var()
-    if neededVar:
-        messagebox.showwarning("Warning", f"You must set the following variables: {neededVar}")
-        
 def check_latest_version(root):
     random_number = random.randint(1, 1000000)
     url = f"https://raw.githubusercontent.com/CArchambault00/SVNManager/main/latest_version.txt?nocache={random_number}"
@@ -140,7 +152,6 @@ def setup_gui():
     icon_path = os.path.join(bundle_dir, "SVNManagerIcon.ico")
         
     root.iconbitmap(icon_path)
-
     root.title("SVN Manager")
     root.geometry("900x600")
 
@@ -148,8 +159,15 @@ def setup_gui():
     check_latest_version(root)
 
     initialize_native_topbar(root)
-    # Switch to the initial menu
-    switch_to_lock_unlock_menu()
+    
+    # Check configuration before switching to initial menu
+    config = load_config()
+    if not config.get("username"):
+        messagebox.showwarning("Setup Required", "Please set your username in the Config menu")
+    elif not config.get("active_profile"):
+        messagebox.showwarning("Setup Required", "Please select or create a profile in the Profile menu")
+    else:
+        switch_to_lock_unlock_menu()
     
     return root
 

@@ -11,3 +11,4 @@ SVNManager.spec
 instantclient_12_1
 SVNManager.exe
 SVNManager_success.log
+SVNManager_error.log

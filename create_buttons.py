@@ -7,6 +7,8 @@ from buttons_function import insert_next_version, modify_patch, build_existing_p
 from patches_operations import refresh_patches, update_patch
 from config import load_config
 from db_handler import dbClass
+from tkinter import messagebox
+from profiles import get_profile
 
 def create_button_frame(parent, files_listbox):
     tk.Button(parent, text="Refresh lock files", command=lambda: refresh_locked_files(files_listbox), background="#80DDFF", width=15).pack(side="top", pady=20)
@@ -25,12 +27,16 @@ def create_button_frame_patch(parent, files_listbox):
     patch_version_label = tk.Label(patch_version_frame, text="Patch Version:")
     patch_version_label.pack(side="left", padx=5)
 
-    # Dropdown for patch prefixe
-    db = dbClass()
-    prefixes = db.get_prefix_list()
+    # Get active profile's patch prefix
+    config = load_config()
+    active_profile = get_profile(config.get("active_profile"))
+    if not active_profile or not active_profile.patch_prefix:
+        messagebox.showerror("Error", "No active profile or patch prefix configured")
+        return
 
-    patch_version_prefixe = ttk.Combobox(patch_version_frame, values=prefixes, width=3)
-    patch_version_prefixe.set("S")  # default value
+    # Dropdown for patch prefix (disabled, showing active profile's prefix)
+    patch_version_prefixe = ttk.Combobox(patch_version_frame, values=[active_profile.patch_prefix[0]], width=3, state="disabled")
+    patch_version_prefixe.set(active_profile.patch_prefix[0])
     patch_version_prefixe.pack(side="left", padx=5)
 
     patch_version_entry = tk.Entry(patch_version_frame, width=14)
@@ -39,7 +45,6 @@ def create_button_frame_patch(parent, files_listbox):
     ## Next Version Button
     tk.Button(patch_version_frame, text="Next Version", command=lambda: insert_next_version(patch_version_prefixe.get(), patch_version_entry), background="#80DDFF").pack(side="left", padx=5)
 
-
     ## Add a section to write the patch description
     patch_description_frame = tk.Frame(parent)
     patch_description_frame.pack(side="top", pady=5, fill="both", expand=True)
@@ -47,7 +52,7 @@ def create_button_frame_patch(parent, files_listbox):
     patch_description_label = tk.Label(patch_description_frame, text="Patch Description:")
     patch_description_label.pack(side="top", padx=5)
 
-    patch_description_entry = tk.Text(patch_description_frame, height=10, width=40)  # Changed to Text widget
+    patch_description_entry = tk.Text(patch_description_frame, height=10, width=40)
     patch_description_entry.pack(side="top", padx=5, fill="both", expand=True)
 
     # Add a checkbox button to unlock files after patch generation
@@ -68,11 +73,11 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     patch_version_label = tk.Label(patch_version_frame, text="Patch Version:")
     patch_version_label.pack(side="left", padx=5)
 
-    db = dbClass()
-    prefixes = db.get_prefix_list()
-
-    patch_version_prefixe = ttk.Combobox(patch_version_frame, values=prefixes, width=3)
+    # Get the original patch prefix
     patch_prefixe = patch_details['NAME'][0]  # Extract the prefix from the selected patch's version
+
+    # Create disabled combobox with only the original prefix
+    patch_version_prefixe = ttk.Combobox(patch_version_frame, values=[patch_prefixe], width=3, state="disabled")
     patch_version_prefixe.set(patch_prefixe)  # Set to the selected patch's version
     patch_version_prefixe.pack(side="left", padx=5)
 
@@ -100,7 +105,7 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     )
     unlock_files_checkbox.pack(side="left", padx=5)
 
-    tk.Button(parent, text="Update Patch", command=lambda: update_patch([files_listbox.item(item, "values")[2] for item in files_listbox.selection()], patch_details["PATCH_ID"], patch_version_prefixe.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip(),switch_to_modify_patch_menu, unlock_files.get()), background="#FF8080", width=15).pack(side="top", pady=5)
+    tk.Button(parent, text="Update Patch", command=lambda: update_patch([files_listbox.item(item, "values")[2] for item in files_listbox.selection()], patch_details["PATCH_ID"], patch_version_prefixe.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip(), switch_to_modify_patch_menu, unlock_files.get()), background="#FF8080", width=15).pack(side="top", pady=5)
 
 def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_menu):
     config = load_config()
