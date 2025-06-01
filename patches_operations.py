@@ -191,7 +191,8 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
             file_id = db.create_patch_detail(patch_id, fake_path, filename, get_file_head_revision(file))
             md5checksum = get_md5_checksum(f"{svn_path}/{file}")
             db.set_md5(patch_id, file_id, md5checksum)
-            create_patch_files_batch(file, svn_path, patch_version_folder)
+            
+        create_patch_files_batch(selected_files, svn_path, patch_version_folder)
         
         create_readme_file(patch_version_folder, patch_name, username, 
                          time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)

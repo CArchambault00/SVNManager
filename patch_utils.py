@@ -222,21 +222,54 @@ def create_readme_file(patch_version_folder, patch_name, username, creation_date
 def create_main_sql_file(patch_version_folder, files, patch_name=None, version_info=None, application_id=None):
     """Create MainSQL.sql file with SQL commands."""
     try:
-        # Pre-process files to avoid multiple iterations
+        # Start with header commands
         sql_commands = ["prompt &&HOST", "prompt &&PERSON", "set echo on\n"]
         
+        # Group files by schema
+        schema_files = {}
+        
+        # Process and organize files by schema
         for file in files:
             if isinstance(file, dict) and file["FOLDER_TYPE"] == '2':
                 schema = file["PATH"].split("/")[1]
                 file_path = 'DB' + file["PATH"].replace("Database", "DB").replace("StoredProcedures", "SP")
-                sql_commands.extend(_generate_sql_commands(file_path, schema))
+                if schema not in schema_files:
+                    schema_files[schema] = []
+                schema_files[schema].append(file_path)
             elif isinstance(file, str) and file.startswith("Database"):
                 file_path = file.replace("Database", "DB").replace("StoredProcedures", "SP")
                 schema = file.split("/")[1]
-                sql_commands.extend(_generate_sql_commands(file_path, schema))
+                if schema not in schema_files:
+                    schema_files[schema] = []
+                schema_files[schema].append(file_path)
         
+        # Generate SQL commands for each schema
+        for schema, paths in schema_files.items():
+            # Sort files to ensure PKS before PKB
+            paths.sort(key=lambda x: 0 if x.endswith('.PKS') else (1 if x.endswith('.PKB') else 2))
+            
+            # Add schema connection block
+            sql_commands.extend([
+                "set scan on",
+                f"connect {schema}/{schema}@&&HOST",
+                "set scan off",
+                "set echo off"
+            ])
+            
+            # Add each file in this schema block
+            for file_path in paths:
+                sql_commands.extend([
+                    f'prompt Loading "{file_path}" ...',
+                    f'@@"{file_path}"',
+                    "show error"
+                ])
+            
+            # End the schema block
+            sql_commands.append("set echo on\n")
+        
+        # Add version control commands
         sql_commands.extend([
-            "set echo on",
+            "set scan on",
             "connect CMATC/CMATC@&&HOST"
         ])
         
@@ -254,6 +287,7 @@ def create_main_sql_file(patch_version_folder, files, patch_name=None, version_i
         
         sql_commands.extend(["commit;", "\nexit;"])
         
+        # Write commands to file
         with open(os.path.join(patch_version_folder, "MainSQL.sql"), "w") as main_sql:
             main_sql.write("\n".join(sql_commands))
             
