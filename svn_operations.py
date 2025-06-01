@@ -112,7 +112,14 @@ def refresh_locked_files(files_listbox):
         for entry in root.findall(".//entry"):
             path = entry.get("path", "").replace("\\", "/")
             wc_status = entry.find("wc-status")
-            revision = wc_status.get("revision") if wc_status is not None else ""
+            
+            # Look for commit revision instead of wc-status revision
+            commit = wc_status.find("commit") if wc_status is not None else None
+            revision = commit.get("revision") if commit is not None else ""
+            
+            # If commit revision is not available, fall back to working copy revision
+            if not revision and wc_status is not None:
+                revision = wc_status.get("revision", "")
 
             # Check wc-status and repos-status for lock
             for status_tag in ["wc-status", "repos-status"]:
@@ -213,7 +220,14 @@ def get_file_info_batch(files, batch_size=50):
                     root = ET.fromstring(result.stdout)
                     entry = root.find(".//entry")
                     if entry is not None:
-                        revision = entry.get("revision", "")
+                        # Get the <commit> element instead of the entry revision
+                        commit = entry.find(".//commit")
+                        if commit is not None:
+                            # Get revision from the commit element
+                            revision = commit.get("revision", "")
+                        else:
+                            # Fall back to working copy revision if commit is not found
+                            revision = entry.get("revision", "")
                         
                         lock = entry.find(".//lock")
                         if lock is not None:
