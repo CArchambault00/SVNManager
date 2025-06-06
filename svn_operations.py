@@ -439,3 +439,86 @@ def get_file_head_revision(file):
     """Get the HEAD revision for a single file."""
     results = get_file_head_revision_batch([file])
     return results.get(file, "")
+
+
+def view_file_native_diff(file_path):
+    """
+    Open the native SVN diff tool to compare working copy with repository version.
+    
+    Args:
+        file_path: Path to the file to compare
+    """
+    try:
+        config = load_config()
+        svn_path = config.get("svn_path")
+        full_path = os.path.join(svn_path, file_path)
+        
+        # Method 1: Try TortoiseSVN first (best visual diff on Windows)
+        try:
+            tortoise_path = "TortoiseProc.exe"
+            result = subprocess.run(
+                [tortoise_path, "/command:diff", f"/path:{full_path}"],
+                capture_output=True,
+                text=True,
+                shell=False,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            if result.returncode == 0:
+                return  # TortoiseSVN opened successfully
+        except FileNotFoundError:
+            # TortoiseProc not found, continue to next method
+            pass
+        except Exception as e:
+            print(f"TortoiseSVN error: {e}")
+        
+        # Method 2: Try using SVN diff with system-configured diff tool
+        try:
+            result = subprocess.run(
+                ["svn", "diff", file_path],
+                cwd=svn_path,
+                shell=False
+            )
+            if result.returncode == 0:
+                return  # SVN diff opened successfully
+        except Exception as e:
+            print(f"SVN diff error: {e}")
+            
+        # Method 3: If previous methods failed, get the diff content and display in a window
+        try:
+            result = subprocess.run(
+                ["svn", "diff", file_path],
+                cwd=svn_path,
+                capture_output=True,
+                text=True,
+                shell=False,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            
+            # If we have diff content, show it in a window
+            if result.stdout:
+                # Create a new window to display the diff
+                import tkinter as tk
+                from tkinter import scrolledtext
+                
+                diff_window = tk.Toplevel()
+                diff_window.title(f"Diff for {file_path}")
+                diff_window.geometry("800x600")
+                
+                diff_text = scrolledtext.ScrolledText(diff_window, wrap=tk.WORD, font=("Courier New", 10))
+                diff_text.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
+                diff_text.insert(tk.END, result.stdout)
+                diff_text.config(state=tk.DISABLED)  # Make it read-only
+                
+                # Add a close button
+                close_button = tk.Button(diff_window, text="Close", command=diff_window.destroy)
+                close_button.pack(pady=10)
+                
+                return
+            else:
+                raise Exception("No differences found or failed to retrieve diff content")
+                
+        except Exception as e:
+            raise Exception(f"Failed to show diff: {e}")
+                
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to open diff viewer:\n{e}")

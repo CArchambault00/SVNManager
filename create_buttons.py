@@ -3,7 +3,7 @@ from tkinter import ttk
 from svn_operations import lock_files, unlock_files, refresh_locked_files
 from buttons_function import lock_selected_files, unlock_selected_files
 from patch_generation import generate_patch
-from buttons_function import insert_next_version, modify_patch, build_existing_patch, view_patch_files
+from buttons_function import insert_next_version, modify_patch, build_existing_patch, view_patch_files, view_selected_file_native_diff
 from patches_operations import refresh_patches, update_patch
 from config import load_config
 from db_handler import dbClass
@@ -11,13 +11,33 @@ from tkinter import messagebox
 from profiles import get_profile
 
 def create_button_frame(parent, files_listbox):
-    tk.Button(parent, text="Refresh lock files", command=lambda: refresh_locked_files(files_listbox), background="#80DDFF", width=15).pack(side="top", pady=20)
+    
     tk.Frame(parent, height=20).pack(side="top")
     tk.Button(parent, text="Lock All", command=lambda: lock_files([files_listbox.item(item, "values")[2] for item in files_listbox.get_children()], files_listbox), background="#FF8080", width=15).pack(side="top", pady=5)
     tk.Button(parent, text="Lock Selected", command=lambda: lock_selected_files(files_listbox), background="#FF8080", width=15).pack(side="top", pady=5)
     tk.Frame(parent, height=20).pack(side="top")
     tk.Button(parent, text="Unlock All", command=lambda: unlock_files([files_listbox.item(item, "values")[2] for item in files_listbox.get_children()], files_listbox), background="#44FF80", width=15).pack(side="top", pady=5)
     tk.Button(parent, text="Unlock Selected", command=lambda: unlock_selected_files(files_listbox), background="#44FF80", width=15).pack(side="top", pady=5)
+    
+    # Add separator before the View Diff button
+    tk.Frame(parent, height=20).pack(side="top")
+    
+    # Add View Diff button
+    diff_button = tk.Button(parent, text="View Diff", command=lambda: view_selected_file_native_diff(files_listbox), background="#FCFF80", width=15)
+    diff_button.pack(side="top", pady=5)
+    
+    # Enable/disable View Diff button based on selection
+    def on_selection_change(event):
+        if len(files_listbox.selection()) == 1:
+            diff_button.config(state="normal")
+        else:
+            diff_button.config(state="disabled")
+    
+    # Bind selection change events
+    files_listbox.bind("<<TreeviewSelect>>", on_selection_change)
+    
+    # Initial state of the diff button (disabled by default)
+    diff_button.config(state="disabled")
 
 def create_button_frame_patch(parent, files_listbox):
     ## Patch Version entry

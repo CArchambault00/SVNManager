@@ -5,6 +5,7 @@ from patches_operations import get_full_patch_info, set_selected_patch, build_pa
 import os
 from svn_operations import get_file_info, get_file_info_batch
 from config import load_config
+from tkinter import messagebox
 
 def lock_selected_files(files_listbox):
     selected_files = [files_listbox.item(item, "values")[2] for item in files_listbox.selection()]
@@ -120,3 +121,18 @@ def view_patch_files(selected_patch):
         patch_details = selected_patch[0]  # Assuming selected_patch is a list of selected items
         full_patch_info = get_full_patch_info(patch_details[0])
         view_files_from_patch(full_patch_info)
+
+def view_selected_file_native_diff(files_listbox):
+    """
+    View the differences between the working copy and the repository version
+    of the selected file using native SVN diff tool.
+    """
+    selected_items = files_listbox.selection()
+    if len(selected_items) != 1:
+        messagebox.showwarning("Selection Error", "Please select exactly one file to view differences.")
+        return
+        
+    # Get the file path from the selected item
+    file_path = files_listbox.item(selected_items[0], "values")[2]
+    from svn_operations import view_file_native_diff
+    view_file_native_diff(file_path)
