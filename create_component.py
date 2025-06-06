@@ -146,7 +146,7 @@ def create_top_frame(
         ("Lock/Unlock", switch_to_lock_unlock_menu, "lock_unlock"),
         ("Create Patch", switch_to_patch_menu, "patch"),
         ("Patches List", switch_to_patches_menu, "patches"),
-        ("Modify Patch", lambda: switch_to_modify_patch_menu(selected_patch) if selected_patch else switch_to_patches_menu, "modify_patch"),
+        ("Modify Patch", lambda: switch_to_modify_patch_menu() if selected_menu == "modify_patch" else (switch_to_modify_patch_menu(selected_patch) if selected_patch else switch_to_patches_menu()), "modify_patch"),
     ]
 
     for text, command, menu in buttons:

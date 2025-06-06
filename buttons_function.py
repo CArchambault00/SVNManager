@@ -107,8 +107,15 @@ def modify_patch(selected_patch, switch_to_modify_patch_menu):
     if selected_patch:
         patch_details = selected_patch[0]  # Assuming selected_patch is a list of selected items
         full_patch_info = get_full_patch_info(patch_details[0])
-        set_selected_patch(full_patch_info)
-        switch_to_modify_patch_menu(full_patch_info)
+        if full_patch_info:
+            # Always update the globally selected patch with the new selection
+            set_selected_patch(full_patch_info)
+            # Pass the full patch info to the modify function
+            switch_to_modify_patch_menu(full_patch_info)
+        else:
+            messagebox.showerror("Error", f"Could not find details for patch {patch_details[0]}")
+    else:
+        messagebox.showwarning("No Selection", "Please select a patch to modify")
 
 def build_existing_patch(selected_patch):
     if selected_patch:

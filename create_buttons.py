@@ -18,6 +18,7 @@ def create_button_frame(parent, files_listbox):
     tk.Frame(parent, height=20).pack(side="top")
     tk.Button(parent, text="Unlock All", command=lambda: unlock_files([files_listbox.item(item, "values")[2] for item in files_listbox.get_children()], files_listbox), background="#44FF80", width=15).pack(side="top", pady=5)
     tk.Button(parent, text="Unlock Selected", command=lambda: unlock_selected_files(files_listbox), background="#44FF80", width=15).pack(side="top", pady=5)
+    tk.Button(parent, text="Refresh Locked Files", command=lambda: refresh_locked_files(files_listbox), background="#80DDFF", width=15).pack(side="top", pady=5)
     
     # Add separator before the View Diff button
     tk.Frame(parent, height=20).pack(side="top")
@@ -52,7 +53,7 @@ def create_button_frame_patch(parent, files_listbox):
     active_profile = get_profile(config.get("active_profile"))
     if not active_profile or not active_profile.patch_prefix:
         messagebox.showerror("Error", "No active profile or patch prefix configured")
-        return
+        return {}
 
     # Dropdown for patch prefix (disabled, showing active profile's prefix)
     patch_version_prefixe = ttk.Combobox(patch_version_frame, values=[active_profile.patch_prefix[0]], width=3, state="disabled")
@@ -85,6 +86,14 @@ def create_button_frame_patch(parent, files_listbox):
     unlock_files_checkbox.pack(side="left", padx=5)
 
     tk.Button(parent, text="Generate Patch", command=lambda: generate_patch([files_listbox.item(item, "values")[2] for item in files_listbox.selection()], patch_version_prefixe.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip(), unlock_files.get()), background="#FF8080", width=15).pack(side="top", pady=5)
+    
+    # Return widget references for state management
+    return {
+        "patch_version_prefixe": patch_version_prefixe,
+        "patch_version_entry": patch_version_entry,
+        "patch_description_entry": patch_description_entry,
+        "unlock_files": unlock_files
+    }
 
 def create_button_frame_modify_patch(parent, files_listbox, patch_details, switch_to_modify_patch_menu):
     patch_version_frame = tk.Frame(parent)
@@ -126,6 +135,14 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     unlock_files_checkbox.pack(side="left", padx=5)
 
     tk.Button(parent, text="Update Patch", command=lambda: update_patch([files_listbox.item(item, "values")[2] for item in files_listbox.selection()], patch_details["PATCH_ID"], patch_version_prefixe.get(), patch_version_entry.get(), patch_description_entry.get("1.0", tk.END).strip(), switch_to_modify_patch_menu, unlock_files.get()), background="#FF8080", width=15).pack(side="top", pady=5)
+    
+    # Return widget references for state management
+    return {
+        "patch_version_prefixe": patch_version_prefixe,
+        "patch_version_entry": patch_version_entry,
+        "patch_description_entry": patch_description_entry,
+        "unlock_files": unlock_files
+    }
 
 def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_menu):
     config = load_config()
@@ -152,3 +169,8 @@ def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_
 
     # View patch files
     tk.Button(parent, text="View Patch Files", command=lambda: view_patch_files([patches_listbox.item(item, "values") for item in patches_listbox.selection()]), background="#44FF80", width=15).pack(side="top", pady=5)
+    
+    # Return widget references for state management
+    return {
+        "patch_version_prefixe": patch_version_prefixe
+    }
