@@ -332,7 +332,7 @@ def get_md5_checksum_batch(files):
     return results
 
 def create_patch_files_batch(files, svn_path, patch_version_folder):
-    """Create patch files in batches to optimize I/O operations."""
+    """Create patch files in batches with proper error handling."""
     web_files = []
     db_files = []
     
@@ -353,19 +353,53 @@ def create_patch_files_batch(files, svn_path, patch_version_folder):
                 f"{svn_path}/{file_path_no_svn}"
             ))
 
-    # Create directories in bulk
+    # Create directories with error handling
     directories = set()
     for _, dest_path, _ in web_files + db_files:
         directories.add(os.path.dirname(os.path.join(patch_version_folder, dest_path)))
     
     for directory in directories:
-        os.makedirs(directory, exist_ok=True)
-
-    # Copy files in batches
-    for file_info in web_files + db_files:
         try:
-            _, dest_path, src_location = file_info
-            dest_file = os.path.join(patch_version_folder, dest_path)
-            shutil.copy2(src_location, dest_file)
+            if not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
+            # Verify write permissions
+            test_file = os.path.join(directory, ".write_test")
+            try:
+                with open(test_file, 'w') as f:
+                    f.write("test")
+                os.remove(test_file)
+            except Exception as e:
+                raise PermissionError(f"No write permission in directory: {directory}")
         except Exception as e:
-            raise Exception(f"Error creating patch files for {file_info[0]}: {e}")
+            raise Exception(f"Failed to create/verify directory {directory}: {e}")
+
+    # Copy files with retries
+    max_retries = 3
+    retry_delay = 0.5  # seconds
+    
+    for file_info in web_files + db_files:
+        org_path, dest_path, src_location = file_info
+        dest_file = os.path.join(patch_version_folder, dest_path)
+        
+        for attempt in range(max_retries):
+            try:
+                # Ensure destination directory exists and is writable
+                dest_dir = os.path.dirname(dest_file)
+                if not os.path.exists(dest_dir):
+                    os.makedirs(dest_dir, exist_ok=True)
+                
+                # If file exists, ensure it's writable
+                if os.path.exists(dest_file):
+                    os.chmod(dest_file, 0o666)
+                
+                # Copy the file
+                shutil.copy2(src_location, dest_file)
+                break
+            except PermissionError as e:
+                if attempt == max_retries - 1:
+                    raise Exception(f"Permission denied accessing {dest_file} after {max_retries} attempts")
+                time.sleep(retry_delay)
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise Exception(f"Failed to copy {org_path} to {dest_file}: {e}")
+                time.sleep(retry_delay)

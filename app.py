@@ -9,7 +9,7 @@ from tkinterdnd2 import TkinterDnD
 from typing import Tuple, Optional, Dict, Any, List
 
 # Local modules
-from svn_operations import refresh_locked_files, get_file_info
+from svn_operations import refresh_locked_files, get_file_info, refresh_file_status_version
 from patches_operations import refresh_patches, refresh_patch_files
 from create_component import create_patches_treeview, create_file_listbox, create_top_frame
 from create_buttons import (
@@ -256,16 +256,20 @@ def switch_to_patch_menu(root_widget=None) -> None:
                     values = files_listbox.item(item_id, "values")
                     if values and values[2] in patch_state["selected_files"]:
                         files_listbox.selection_add(item_id)
+
+        refresh_file_status_version(files_listbox)
         
         # Always refresh ONLY the locked files treeview
         if "locked_files_treeview" in buttons_frame:
             refresh_available_locked_files(buttons_frame["locked_files_treeview"], files_listbox)
+            
         
         # Create drag and drop callback
         def on_drop_with_state_preservation(event):
             from buttons_function import handle_drop
             handle_drop(event, files_listbox)
-            save_current_state()
+            root = files_listbox.winfo_toplevel()  # Get root from the listbox widget
+            save_current_state(root)  # Pass root to save_current_state
             if "locked_files_treeview" in buttons_frame:
                 refresh_available_locked_files(buttons_frame["locked_files_treeview"], files_listbox)
         
@@ -475,6 +479,9 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
         restore_patch_form_state(buttons_frame, modify_patch_state)
     else:
         refresh_patch_files(files_listbox, patch_details)
+
+    
+    refresh_file_status_version(files_listbox)
     
     # Update locked files treeview after layout is stable
     if "locked_files_treeview" in buttons_frame:
@@ -487,7 +494,8 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
         handle_drop(event, files_listbox)
         
         if state_manager.current_menu == "modify_patch":
-            save_current_state()
+            root = files_listbox.winfo_toplevel()  # Get root from the listbox widget
+            save_current_state(root)  # Pass root to save_current_state
             
             if "locked_files_treeview" in buttons_frame:
                 refresh_available_locked_files(buttons_frame["locked_files_treeview"], files_listbox)

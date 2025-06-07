@@ -167,9 +167,18 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
     username = config.get("username")
 
     patch_version_entry = patch_version_entry.upper()
-    
     patch_name = patch_version_prefixe + patch_version_entry
-    patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_name)
+    
+    # Add old patch folder path to handle cleanup
+    old_patch_name = patch_info_dict.get(patch_name, {}).get("NAME")
+    if old_patch_name:
+        old_patch_folder = os.path.join(config.get("current_patches"), old_patch_name)
+        cleanup_files(old_patch_folder)  # Clean up old patch folder
+        
+    patch_version_folder = os.path.join(config.get("current_patches"), patch_name)
+    # Clean up target folder as well
+    cleanup_files(patch_version_folder)
+    
     try:
         if not selected_files or len(selected_files) == 0:
             if not messagebox.askyesno("No Files Selected", 
@@ -204,14 +213,24 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         create_depend_txt(db, patch_version_folder, patch_id)
         
         db.conn.commit()
+        
+        # Refresh patches dictionary and update global state
         refresh_patches_dict(False, patch_version_prefixe)
         full_patch_info = get_full_patch_info(patch_name)
+        
+        # Update the selected patch state
+        set_selected_patch(full_patch_info)
+        
+        # Switch to modify patch menu with updated info
         switch_to_modify_patch_menu(full_patch_info)
+        
         success_details = f"Patch: {patch_name}\nFiles: {len(selected_files)}\nDescription: {patch_description}"
         log_success("Patch Update", success_details)
         tk.messagebox.showinfo("Success", "Patch updated successfully!")
+        
     except Exception as e:
         db.conn.rollback()
+        # Clean up any partially created files on error
         cleanup_files(patch_version_folder)
         error_msg = f"Failed to update patch: {str(e)}"
         log_error(error_msg, include_stack=True)
