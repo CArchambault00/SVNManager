@@ -75,7 +75,7 @@ def initialize_native_topbar(root):
     unset_var = get_unset_var()
     active_profile = config.get("active_profile")
 
-    # Add Profile menu with appropriate checkmark
+    # Add Profile menu
     menu_bar.add_cascade(label=f"Profile {'✔️' if active_profile else '❌'}", menu=profile_menu)
     profile_menu.add_command(
         label="Manage Profiles...", 
@@ -117,6 +117,13 @@ def initialize_native_topbar(root):
     )
 
     menu_bar.add_cascade(label="Help", menu=help_menu)
+    
+    # Add Reset button before Exit
+    menu_bar.add_command(
+        label="Reset current menu",
+        command=lambda: reset_current_menu(root)
+    )
+    
     menu_bar.add_cascade(label="Exit", command=root.quit)
     
     root.config(menu=menu_bar)
@@ -126,3 +133,39 @@ def initialize_native_topbar(root):
         messagebox.showwarning("Setup Required", "Please set your username in the Config menu.")
     elif not config.get("active_profile"):
         messagebox.showwarning("Setup Required", "Please select or create a profile in the Profile menu.")
+
+def reset_current_menu(root):
+    """Reset the current menu state"""
+    from state_manager import state_manager
+    from app import (switch_to_lock_unlock_menu, switch_to_patch_menu,
+                    switch_to_patches_menu, switch_to_modify_patch_menu)
+    
+    if state_manager.is_menu_loading():
+        # Schedule reset attempt after a short delay if menu is loading
+        root.after(100, lambda: reset_current_menu(root))
+        return
+        
+    current_menu = state_manager.current_menu
+    if current_menu == "patch":
+        # Clear patch state and rebuild menu
+        state_manager.clear_state("patch")
+        # Keep current menu to avoid recursion
+        state_manager.current_menu = "patch"
+        # Recreate menu with fresh state
+        switch_to_patch_menu(root)
+    elif current_menu == "patches":
+        # Just refresh the patches list
+        switch_to_patches_menu(root)
+    elif current_menu == "modify_patch":
+        # Get original patch details to restore initial state
+        patch_state = state_manager.get_state("modify_patch")
+        original_details = patch_state.get("original_patch_details")
+        if original_details:
+            state_manager.clear_state("modify_patch")
+            # Keep menu state and original details
+            state_manager.current_menu = "modify_patch"
+            modify_patch_state = state_manager.get_state("modify_patch")
+            modify_patch_state["patch_details"] = original_details
+            modify_patch_state["original_patch_details"] = original_details
+            # Rebuild menu with original state
+            switch_to_modify_patch_menu(original_details, root)

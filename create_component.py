@@ -2,8 +2,9 @@ import tkinter as tk
 from tkinter import ttk
 from tkinterdnd2 import DND_FILES
 from typing import Callable
-from patches_operations import get_selected_patch
-from buttons_function import select_all_files, deselect_all_files, handle_drop
+from patches_operations import get_selected_patch, refresh_patches
+from buttons_function import select_all_files, deselect_all_files, handle_drop, remove_selected_patch
+from svn_operations import refresh_locked_files, refresh_file_status_version
 from datetime import datetime
 
 # Constants for column configurations
@@ -34,17 +35,56 @@ def add_scrollbars(widget: ttk.Treeview, parent: tk.Widget) -> None:
     widget.configure(xscrollcommand=h_scrollbar.set)
     h_scrollbar.pack(side="bottom", fill="x")
 
-def create_context_menu(listbox: ttk.Treeview) -> tk.Menu:
-    """Create right-click context menu for the listbox."""
+def create_context_menu(listbox: ttk.Treeview, menu_type: str = "files") -> tk.Menu:
+    """Create right-click context menu for the listbox.
+    
+    Parameters:
+    - listbox: The treeview widget
+    - menu_type: Type of menu to create ('files', 'patches', or 'locked_files')
+    """
+    from create_buttons import add_selected_to_main_treeview, refresh_available_locked_files
+    
     context_menu = tk.Menu(listbox, tearoff=0)
-    context_menu.add_command(label="Remove Selected", command=lambda: remove_selected_items(listbox))
+    
+    if menu_type == "files":
+        # Top Treeview options
+        context_menu.add_command(label="Remove selected files from patch", 
+                               command=lambda: remove_and_return_selected_files(listbox))
+        context_menu.add_command(label="Refresh files", 
+                               command=lambda: refresh_file_status_version(listbox))
+    elif menu_type == "patches":
+        context_menu.add_command(label="Remove patch", 
+                               command=lambda: remove_selected_patch(listbox))
+        context_menu.add_separator()
+        context_menu.add_command(label="Refresh Patches", 
+                               command=lambda: refresh_patches_from_menu(listbox))
+    elif menu_type == "locked_files":
+        # Bottom Treeview options
+        context_menu.add_command(label="Add selected files to patch", 
+                               command=lambda: add_selected_to_main_treeview(listbox, find_main_treeview(listbox)))
+        context_menu.add_command(label="Refresh files", 
+                               command=lambda: refresh_file_status_version(listbox))
+        context_menu.add_command(label="Refresh locked files",
+                               command=lambda: refresh_available_locked_files(listbox, find_main_treeview(listbox)))
     
     def show_context_menu(event):
-        if listbox.selection():  # Only show menu if items are selected
+        if menu_type == "patches" or listbox.selection():  # For patches, always show; for others, only when items selected
             context_menu.post(event.x_root, event.y_root)
     
     listbox.bind("<Button-3>", show_context_menu)
     return context_menu
+
+def refresh_patches_from_menu(listbox):
+    """Refresh patches from context menu"""
+    from config import load_config
+    config = load_config()
+    username = config.get("username")
+    # Get the active prefix (need to check parent widget)
+    from app import find_patch_prefix_combobox
+    root = listbox.winfo_toplevel()
+    prefix_combo = find_patch_prefix_combobox(root)
+    prefix = prefix_combo.get() if prefix_combo else "S"
+    refresh_patches(listbox, False, prefix, username)
 
 def remove_selected_items(listbox: ttk.Treeview) -> None:
     """Remove selected items from the listbox."""
@@ -68,6 +108,8 @@ def create_patches_treeview(parent: tk.Widget) -> ttk.Treeview:
         treeview.column(col_name, width=col_width, stretch=tk.NO)
 
     add_scrollbars(treeview, parent)
+    create_context_menu(treeview, "patches")  # Specify patches menu type
+    
     treeview.pack(expand=True, fill="both")
     return treeview
 
@@ -87,7 +129,7 @@ def create_file_listbox(parent: tk.Widget) -> ttk.Treeview:
         listbox.column(col_name, width=col_width, stretch=tk.NO)
 
     add_scrollbars(listbox, parent)
-    create_context_menu(listbox)  # Add right-click menu
+    create_context_menu(listbox, "files")  # Specify files menu type
 
     listbox.pack(expand=True, fill="both")
     listbox.bind("<Control-a>", lambda event: select_all_files(event, listbox))
@@ -160,3 +202,103 @@ def create_top_frame(
         ).pack(side="left", padx=5, pady=5)
 
     return menu_button_frame
+
+def remove_and_return_selected_files(listbox):
+    """Remove selected files from patch and return them to available locked files if they're locked by the user"""
+    from config import load_config
+    from svn_operations import get_file_info
+    
+    selected_items = listbox.selection()
+    if not selected_items:
+        return
+        
+    # Find the locked files treeview
+    locked_files_treeview = find_locked_files_treeview(listbox)
+    if not locked_files_treeview:
+        # Just remove the files if we can't find the locked files treeview
+        for item in selected_items:
+            listbox.delete(item)
+        return
+    
+    username = load_config().get("username", "")
+    
+    # Get existing files in locked_files_treeview to avoid duplicates
+    existing_locked_files = set()
+    for item in locked_files_treeview.get_children():
+        file_path = locked_files_treeview.item(item, "values")[2]
+        existing_locked_files.add(file_path)
+    
+    for item in selected_items:
+        values = listbox.item(item, "values")
+        file_path = values[2]
+        
+        # Check if file is locked by the current user
+        is_locked_by_user, lock_owner, revision, lock_date = get_file_info(file_path)
+        
+        # Add to locked files treeview if it's locked by current user and not already there
+        if is_locked_by_user and file_path not in existing_locked_files:
+            locked_files_treeview.insert("", "end", values=values)
+        
+        # Remove from main files treeview
+        listbox.delete(item)
+
+def refresh_available_locked_files_from_menu(listbox):
+    """Refresh locked files from context menu"""
+    main_treeview = find_main_treeview(listbox)
+    if main_treeview:
+        from create_buttons import refresh_available_locked_files
+        refresh_available_locked_files(listbox, main_treeview)
+
+def find_locked_files_treeview(listbox):
+    """Find the locked files treeview that corresponds to this main treeview"""
+    # Go up to find the common parent
+    parent = listbox.master
+    while parent.master and not isinstance(parent, tk.Toplevel) and not isinstance(parent, tk.Tk):
+        parent = parent.master
+        
+    # Look for the bottom_left_frame, then find the locked_files_frame
+    for frame in parent.winfo_children():
+        if frame.grid_info().get('row') == 1 and frame.grid_info().get('column') == 0:  # bottom_left_frame
+            # In the frame, find the container that has both treeviews
+            for container in frame.winfo_children():
+                if isinstance(container, tk.Frame):
+                    # Look for the locked files frame (second LabelFrame)
+                    frames = [w for w in container.winfo_children() if isinstance(w, tk.LabelFrame)]
+                    if len(frames) >= 2:
+                        locked_files_frame = frames[1]  # Second LabelFrame should be locked files
+                        # Find the treeview in this frame
+                        for widget in locked_files_frame.winfo_children():
+                            if isinstance(widget, ttk.Treeview):
+                                return widget
+    return None
+
+def find_main_treeview(listbox):
+    """Find the main treeview (patch files) that corresponds to this locked files treeview"""
+    # Go up to find the parent LabelFrame
+    parent = listbox.master
+    while parent and not isinstance(parent, tk.LabelFrame):
+        parent = parent.master
+    
+    if not parent:
+        return None
+    
+    # Find the parent container that holds both label frames
+    container = parent.master
+    
+    # Find all LabelFrames in this container
+    if container:
+        label_frames = [widget for widget in container.winfo_children() if isinstance(widget, tk.LabelFrame)]
+        # The main treeview is in the first LabelFrame (Files for patch)
+        if len(label_frames) >= 1 and label_frames[0] != parent:  # Make sure we're not getting the same frame
+            # Find the treeview in this frame
+            for widget in label_frames[0].winfo_children():
+                if isinstance(widget, ttk.Treeview):
+                    return widget
+    
+    # If all else fails, try to find any Treeview in the window hierarchy
+    root = listbox.winfo_toplevel()
+    for widget in root.winfo_children():
+        if isinstance(widget, ttk.Treeview) and widget != listbox:
+            return widget
+            
+    return None

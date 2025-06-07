@@ -241,4 +241,40 @@ def view_files_from_patch(patch_info):
     display_patch_files(file_list, patch_info["NAME"], patch_info["COMMENTS"], 
                         patch_info["USER_ID"], str(patch_info["CREATION_DATE"]))
 
+def remove_patch(patch_info):
+    """
+    Remove a patch from the database.
     
+    Args:
+        patch_info: Dictionary containing patch details
+    """
+    try:
+        db = dbClass()
+        verify_config()
+        
+        patch_id = patch_info["PATCH_ID"]
+        patch_name = patch_info["NAME"]
+        
+        # Ask for confirmation before removing the patch
+        if not messagebox.askyesno("Confirm Removal", 
+                                f"Are you sure you want to remove patch '{patch_name}'?\nThis action cannot be undone."):
+            return
+        
+        # Remove the patch from the database
+        db.conn.begin()
+        db.remove_patch(patch_id)
+        db.conn.commit()
+        
+        # Log the successful removal
+        success_details = f"Patch: {patch_name}\nID: {patch_id}"
+        log_success("Patch Removal", success_details)
+        
+        messagebox.showinfo("Success", f"Patch '{patch_name}' removed successfully!")
+        return True
+    except Exception as e:
+        db.conn.rollback()
+        error_msg = f"Failed to remove patch: {str(e)}"
+        log_error(error_msg, include_stack=True)
+        messagebox.showerror("Error", error_msg)
+        return False
+

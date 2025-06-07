@@ -522,3 +522,111 @@ def view_file_native_diff(file_path):
                 
     except Exception as e:
         messagebox.showerror("Error", f"Failed to open diff viewer:\n{e}")
+
+def refresh_file_status_version(files_listbox):
+    """
+    Refreshes only the status and version of files in the files_listbox
+    without replacing the contents of the listbox.
+    """
+    config = load_config()
+    svn_path = config.get("svn_path", "").replace("\\", "/")
+    username = config.get("username")
+
+    if not os.path.isdir(svn_path):
+        messagebox.showwarning("Warning", "Invalid SVN path!")
+        return
+
+    try:
+        # Get all existing files from the listbox
+        file_paths = []
+        for item in files_listbox.get_children():
+            file_path = files_listbox.item(item, "values")[2]  # File path is at index 2
+            file_paths.append(file_path)
+
+        # Get file info in batch
+        file_info_results = get_file_info_batch(file_paths)
+
+        # Update each file in the listbox
+        for item in files_listbox.get_children():
+            values = files_listbox.item(item, "values")
+            file_path = values[2]
+            
+            lock_by_user, lock_owner, revision, lock_date = file_info_results.get(file_path, (False, "", "", ""))
+            
+            # Update the status and version columns
+            if lock_by_user:
+                new_status = "locked"
+                files_listbox.item(item, values=(new_status, revision, file_path, lock_date))
+            elif not lock_by_user and lock_owner == "":
+                new_status = "unlocked"
+                files_listbox.item(item, values=(new_status, revision, file_path, lock_date))
+            else:
+                new_status = f"@locked - {lock_owner}"
+                files_listbox.item(item, values=(new_status, revision, file_path, lock_date))
+
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to refresh file status and version:\n{e}")
+
+def get_all_locked_files():
+    """
+    Gets all files locked by the current user from SVN.
+    Returns a list of tuples (file_path, revision, lock_date).
+    """
+    config = load_config()
+    svn_path = config.get("svn_path", "").replace("\\", "/")
+    username = config.get("username")
+
+    if not os.path.isdir(svn_path):
+        messagebox.showwarning("Warning", "Invalid SVN path!")
+        return []
+
+    try:
+        result = subprocess.run(
+            ["svn", "status", "--xml", "--verbose"],
+            cwd=svn_path,
+            capture_output=True,
+            text=True,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        if result.returncode != 0:
+            raise Exception(result.stderr)
+
+        locked_files = []
+        root = ET.fromstring(result.stdout)
+
+        for entry in root.findall(".//entry"):
+            path = entry.get("path", "").replace("\\", "/")
+            wc_status = entry.find("wc-status")
+            
+            # Look for commit revision instead of wc-status revision
+            commit = wc_status.find("commit") if wc_status is not None else None
+            revision = commit.get("revision") if commit is not None else ""
+            
+            # If commit revision is not available, fall back to working copy revision
+            if not revision and wc_status is not None:
+                revision = wc_status.get("revision", "")
+
+            # Check wc-status and repos-status for lock
+            for status_tag in ["wc-status", "repos-status"]:
+                lock = entry.find(f"{status_tag}/lock")
+                if lock is not None and lock.findtext("owner") == username:
+                    created_utc = lock.findtext("created", "")
+                    if created_utc:
+                        dt_utc = datetime.strptime(created_utc.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+                        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+                        dt_local = dt_utc.astimezone()  # Convert to local time
+                        lock_date = dt_local.strftime("%Y-%m-%d %H:%M:%S")
+                    else:
+                        lock_date = ""
+                    locked_files.append((path, revision, lock_date))
+                    break
+
+        return locked_files
+
+    except ET.ParseError as e:
+        messagebox.showerror("Error", f"Failed to parse SVN status XML:\n{e}")
+        return []
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to get locked files:\n{e}")
+        return []

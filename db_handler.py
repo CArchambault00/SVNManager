@@ -1,10 +1,71 @@
-import oracledb
-from typing import Optional, List, Dict
-from tkinter import messagebox
-from config import log_error, load_config
 import os
 import sys
-import datetime as date
+from typing import Optional, Dict, List, Any
+import oracledb
+from contextlib import contextmanager
+from datetime import datetime
+from tkinter import messagebox
+from config import log_error, load_config
+
+class DatabaseError(Exception):
+    """Custom exception for database operations."""
+    pass
+
+@contextmanager
+def db_cursor(db_conn):
+    """Context manager for database cursors."""
+    cursor = db_conn.cursor()
+    try:
+        yield cursor
+    finally:
+        cursor.close()
+
+class DatabaseConnection:
+    """Manages the database connection lifecycle."""
+    
+    def __init__(self):
+        self._conn: Optional[oracledb.Connection] = None
+        self._initialize_client()
+        
+    def _initialize_client(self) -> None:
+        """Initialize Oracle client libraries."""
+        try:
+            base_path = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.abspath(".")
+            client_path = os.path.join(base_path, "instantclient_12_1")
+            oracledb.init_oracle_client(lib_dir=client_path)
+        except Exception as e:
+            log_error(f"Failed to initialize Oracle client: {e}")
+            raise DatabaseError(f"Oracle client initialization failed: {e}")
+
+    @property
+    def conn(self) -> oracledb.Connection:
+        """Get the current database connection or create a new one."""
+        if not self._conn:
+            self.connect()
+        return self._conn
+    
+    def connect(self) -> None:
+        """Establish database connection using configuration."""
+        config = load_config()
+        try:
+            self._conn = oracledb.connect(
+                user='DEV_TOOL',
+                password='DEV_TOOL',
+                dsn=config.get("dsn_name", "CYFRAMEPROD")
+            )
+        except oracledb.Error as e:
+            error_msg = f"Database connection failed: {e}"
+            log_error(error_msg)
+            messagebox.showerror("Database Error", error_msg)
+            raise DatabaseError(error_msg)
+
+    def close(self) -> None:
+        """Close the database connection."""
+        if self._conn:
+            try:
+                self._conn.close()
+            finally:
+                self._conn = None
 
 class dbClass:
     def __init__(self):

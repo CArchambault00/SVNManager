@@ -143,3 +143,31 @@ def view_selected_file_native_diff(files_listbox):
     file_path = files_listbox.item(selected_items[0], "values")[2]
     from svn_operations import view_file_native_diff
     view_file_native_diff(file_path)
+
+def remove_selected_patch(patches_listbox):
+    """
+    Remove the selected patch from the database.
+    
+    Args:
+        patches_listbox: The treeview containing the patches
+    """
+    selected_items = patches_listbox.selection()
+    if not selected_items:
+        messagebox.showwarning("No Selection", "Please select a patch to remove")
+        return
+    
+    # Get the selected patch details
+    patch_name = patches_listbox.item(selected_items[0], "values")[0]
+    full_patch_info = get_full_patch_info(patch_name)
+    
+    if not full_patch_info:
+        messagebox.showerror("Error", f"Could not find details for patch {patch_name}")
+        return
+    
+    # Call the remove_patch function
+    from patches_operations import remove_patch
+    result = remove_patch(full_patch_info)
+    
+    # If removal was successful, remove the item from the treeview
+    if result:
+        patches_listbox.delete(selected_items[0])
