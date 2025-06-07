@@ -221,6 +221,16 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         # Update the selected patch state
         set_selected_patch(full_patch_info)
         
+        # Clear and update current state before switching menus
+        from state_manager import state_manager
+        state_manager.clear_state("modify_patch")
+        state_manager.current_menu = "modify_patch"
+        
+        # Get fresh state and update it with new values
+        modify_patch_state = state_manager.get_state("modify_patch")
+        modify_patch_state["patch_details"] = full_patch_info
+        modify_patch_state["original_patch_details"] = full_patch_info.copy()
+        
         # Switch to modify patch menu with updated info
         switch_to_modify_patch_menu(full_patch_info)
         
