@@ -3,8 +3,8 @@ from tkinter import ttk
 from tkinterdnd2 import DND_FILES
 from typing import Callable
 from patches_operations import get_selected_patch, refresh_patches
-from buttons_function import select_all_files, deselect_all_files, handle_drop, remove_selected_patch
-from svn_operations import refresh_locked_files, refresh_file_status_version
+from buttons_function import select_all_rows, deselect_all_rows, handle_drop, remove_selected_patch,view_selected_file_native_diff,lock_selected_files, unlock_selected_files,modify_patch,build_existing_patch,view_patch_files
+from svn_operations import refresh_locked_files, refresh_file_status_version, lock_files, unlock_files
 from datetime import datetime
 
 # Constants for column configurations
@@ -19,7 +19,7 @@ TREEVIEW_COLUMNS = [
 LISTBOX_COLUMNS = [
     ("Status", 60),
     ("Version", 60),
-    ("Files Path", 800),
+    ("Files Path", 400),
     ("Lock Date", 120),
 ]
 
@@ -35,7 +35,7 @@ def add_scrollbars(widget: ttk.Treeview, parent: tk.Widget) -> None:
     widget.configure(xscrollcommand=h_scrollbar.set)
     h_scrollbar.pack(side="bottom", fill="x")
 
-def create_context_menu(listbox: ttk.Treeview, menu_type: str = "files") -> tk.Menu:
+def create_context_menu(listbox: ttk.Treeview, parent: Callable = None, switch_to_modify_patch_menu: Callable = None, menu_type: str = "files") -> tk.Menu:
     """Create right-click context menu for the listbox.
     
     Parameters:
@@ -46,29 +46,109 @@ def create_context_menu(listbox: ttk.Treeview, menu_type: str = "files") -> tk.M
     
     context_menu = tk.Menu(listbox, tearoff=0)
     
-    if menu_type == "files":
-        # Top Treeview options
-        context_menu.add_command(label="Remove selected files from patch", 
-                               command=lambda: remove_and_return_selected_files(listbox))
-        context_menu.add_command(label="Refresh files", 
-                               command=lambda: refresh_file_status_version(listbox))
-    elif menu_type == "patches":
-        context_menu.add_command(label="Remove patch", 
-                               command=lambda: remove_selected_patch(listbox))
-        context_menu.add_separator()
-        context_menu.add_command(label="Refresh Patches", 
-                               command=lambda: refresh_patches_from_menu(listbox))
-    elif menu_type == "locked_files":
-        # Bottom Treeview options
-        context_menu.add_command(label="Add selected files to patch", 
-                               command=lambda: add_selected_to_main_treeview(listbox, find_main_treeview(listbox)))
-        context_menu.add_command(label="Refresh files", 
-                               command=lambda: refresh_file_status_version(listbox))
-        context_menu.add_command(label="Refresh locked files",
-                               command=lambda: refresh_available_locked_files(listbox, find_main_treeview(listbox)))
-    
     def show_context_menu(event):
-        if menu_type == "patches" or listbox.selection():  # For patches, always show; for others, only when items selected
+        context_menu.delete(0, tk.END)  # Clear previous menu items
+        EMOJI_FONT = ("Segoe UI Emoji", 9)  # 9 is the font size, adjust as needed
+        if listbox.selection():  # For patches, always show; for others, only when items selected
+            if menu_type == "lock_unlock":
+                context_menu.add_command(label="🔄 | Refresh locked files", 
+                                    command=lambda: refresh_locked_files(listbox),
+                                    font=EMOJI_FONT)
+                context_menu.add_command(label="🔁 | Refresh files", 
+                                    command=lambda: refresh_file_status_version(listbox),
+                                    font=EMOJI_FONT)
+                context_menu.add_separator()
+                context_menu.add_command(label="👀 | View diff", 
+                                    command=lambda: view_selected_file_native_diff(listbox),
+                                    font=EMOJI_FONT)
+                context_menu.add_separator()
+                context_menu.add_command(label="🔒 | Lock All", 
+                                    command=lambda: lock_files([listbox.item(item, "values")[2] for item in listbox.get_children()], listbox),
+                                    font=EMOJI_FONT)
+                context_menu.add_command(label="🔒 | Lock Selected", 
+                                    command=lambda: lock_selected_files(listbox),
+                                    font=EMOJI_FONT)
+                context_menu.add_separator()
+                context_menu.add_command(label="🔓 | Unlock All", 
+                                    command=lambda: unlock_files([listbox.item(item, "values")[2] for item in listbox.get_children()], listbox),
+                                    font=EMOJI_FONT)
+                context_menu.add_command(label="🔓 | Unlock Selected", 
+                                    command=lambda: unlock_selected_files(listbox),
+                                    font=EMOJI_FONT)
+
+            if menu_type == "files":
+                # Top Treeview options
+                context_menu.add_command(label="🔁 | Refresh files", 
+                                    command=lambda: refresh_file_status_version(listbox),
+                                    font=EMOJI_FONT)
+                context_menu.add_separator()
+                context_menu.add_command(label="❎ | Remove selected files from patch", 
+                                    command=lambda: remove_and_return_selected_files(listbox),
+                                    font=EMOJI_FONT)
+                context_menu.add_separator()
+                context_menu.add_command(label="👀 | View diff", 
+                                    command=lambda: view_selected_file_native_diff(listbox),
+                                    font=EMOJI_FONT)
+            elif menu_type == "patches":
+                context_menu.add_command(label="🔄 | Refresh Patches", 
+                                    command=lambda: refresh_patches_from_menu(listbox),
+                                    font=EMOJI_FONT)
+                context_menu.add_separator()
+                context_menu.add_command(label="❌ | Remove patch", 
+                                    command=lambda: remove_selected_patch(listbox),
+                                    font=EMOJI_FONT)
+                root = parent.winfo_toplevel()  # Get root window reference
+                context_menu.add_command(label="✍️ | Modify Patch", 
+                                    command=lambda: modify_patch([listbox.item(item, "values") for item in listbox.selection()], 
+                                        lambda p: switch_to_modify_patch_menu(p, root)),
+                                    font=EMOJI_FONT)
+                context_menu.add_command(label="🏗️ | Build Patch", 
+                                    command=lambda: build_existing_patch([listbox.item(item, "values") for item in listbox.selection()]),
+                                    font=EMOJI_FONT)
+                context_menu.add_separator()
+                context_menu.add_command(label="👁️ | View Patch Details", 
+                                    command=lambda: view_patch_files([listbox.item(item, "values") for item in listbox.selection()]),
+                                    font=EMOJI_FONT)
+            elif menu_type == "locked_files":
+                # Bottom Treeview options
+                context_menu.add_command(label="🔁 | Refresh files", 
+                                    command=lambda: refresh_file_status_version(listbox),
+                                    font=EMOJI_FONT)
+                context_menu.add_command(label="🔄 | Refresh locked files",
+                                    command=lambda: refresh_available_locked_files(listbox, find_main_treeview(listbox)),
+                                    font=EMOJI_FONT)
+                context_menu.add_separator()
+                context_menu.add_command(label="➕ | Add selected files to patch", 
+                                    command=lambda: add_selected_to_main_treeview(listbox, find_main_treeview(listbox)),
+                                    font=EMOJI_FONT)
+                context_menu.add_separator()
+                context_menu.add_command(label="👀 | View diff", 
+                                    command=lambda: view_selected_file_native_diff(listbox),
+                                    font=EMOJI_FONT)
+            context_menu.post(event.x_root, event.y_root)
+        else:
+            if menu_type == "lock_unlock":
+                context_menu.add_command(label="🔄 | Refresh locked files", 
+                                    command=lambda: refresh_locked_files(listbox))
+                context_menu.add_command(label="🔁 | Refresh files", 
+                                    command=lambda: refresh_file_status_version(listbox))
+                context_menu.add_separator()
+                context_menu.add_command(label="🔒 | Lock All", 
+                                    command=lambda: lock_files([listbox.item(item, "values")[2] for item in listbox.get_children()], listbox))
+                context_menu.add_separator()
+                context_menu.add_command(label="🔓 | Unlock All", 
+                                    command=lambda: unlock_files([listbox.item(item, "values")[2] for item in listbox.get_children()], listbox))
+            if menu_type == "files":
+                context_menu.add_command(label="🔁 | Refresh files", 
+                                    command=lambda: refresh_file_status_version(listbox))
+            elif menu_type == "patches":
+                context_menu.add_command(label="🔄 | Refresh Patches", 
+                                    command=lambda: refresh_patches_from_menu(listbox))
+            elif menu_type == "locked_files":
+                context_menu.add_command(label="🔁 | Refresh files", 
+                                    command=lambda: refresh_file_status_version(listbox))
+                context_menu.add_command(label="🔄 | Refresh locked files",
+                                    command=lambda: refresh_available_locked_files(listbox, find_main_treeview(listbox)))
             context_menu.post(event.x_root, event.y_root)
     
     listbox.bind("<Button-3>", show_context_menu)
@@ -92,7 +172,7 @@ def remove_selected_items(listbox: ttk.Treeview) -> None:
     for item in selected_items:
         listbox.delete(item)
 
-def create_patches_treeview(parent: tk.Widget) -> ttk.Treeview:
+def create_patches_treeview(parent: tk.Widget,switch_to_modify_patch_menu) -> ttk.Treeview:
     """
     Create a Treeview widget to display patches.
     """
@@ -108,12 +188,12 @@ def create_patches_treeview(parent: tk.Widget) -> ttk.Treeview:
         treeview.column(col_name, width=col_width, stretch=tk.NO)
 
     add_scrollbars(treeview, parent)
-    create_context_menu(treeview, "patches")  # Specify patches menu type
-    
+    create_context_menu(treeview, parent, switch_to_modify_patch_menu,  menu_type="patches",)  # Specify patches menu type
+    treeview.bind("<Button-1>", lambda event: deselect_all_rows(event, treeview))
     treeview.pack(expand=True, fill="both")
     return treeview
 
-def create_file_listbox(parent: tk.Widget) -> ttk.Treeview:
+def create_file_listbox(parent: tk.Widget, menu_type:str = "files") -> ttk.Treeview:
     """
     Create a Listbox widget to display files with drag-and-drop support.
     """
@@ -129,11 +209,11 @@ def create_file_listbox(parent: tk.Widget) -> ttk.Treeview:
         listbox.column(col_name, width=col_width, stretch=tk.NO)
 
     add_scrollbars(listbox, parent)
-    create_context_menu(listbox, "files")  # Specify files menu type
+    create_context_menu(listbox, menu_type=menu_type)  # Specify files menu type
 
     listbox.pack(expand=True, fill="both")
-    listbox.bind("<Control-a>", lambda event: select_all_files(event, listbox))
-    listbox.bind("<Button-1>", lambda event: deselect_all_files(event, listbox))
+    listbox.bind("<Control-a>", lambda event: select_all_rows(event, listbox))
+    listbox.bind("<Button-1>", lambda event: deselect_all_rows(event, listbox))
 
     # Enable drag-and-drop
     listbox.drop_target_register(DND_FILES)

@@ -25,7 +25,7 @@ from text_widget_utils import get_text_content, ensure_text_widget_visible
 
 APP_VERSION = "1.0.20"
 
-def create_main_layout(root: tk.Tk) -> Tuple[tk.Frame, tk.Frame, tk.Frame]:
+def create_main_layout(root: tk.Tk, left_weight: int = 2, right_weight: int = 1) -> Tuple[tk.Frame, tk.Frame, tk.Frame]:
     """
     Create the main application layout with three frames.
     
@@ -38,8 +38,8 @@ def create_main_layout(root: tk.Tk) -> Tuple[tk.Frame, tk.Frame, tk.Frame]:
     root.grid_rowconfigure(1, weight=1)
 
     # Ratio 2:1 (left: 2/3, right: 1/3)
-    root.grid_columnconfigure(0, weight=2)  # Bottom left frame
-    root.grid_columnconfigure(1, weight=1)  # Bottom right frame
+    root.grid_columnconfigure(0, weight=left_weight)  # Bottom left frame
+    root.grid_columnconfigure(1, weight=right_weight)  # Bottom right frame
 
     top_frame = tk.Frame(root, height=80, relief=tk.RIDGE, borderwidth=2)
     top_frame.grid(row=0, column=0, columnspan=2, sticky="nsew")
@@ -167,12 +167,12 @@ def switch_to_lock_unlock_menu(root_widget=None) -> None:
         if not isinstance(widget, tk.Menu):
             widget.destroy()
             
-    top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root_widget)
+    top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root_widget, left_weight=2, right_weight=0)
     create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, 
                     switch_to_patches_menu, switch_to_modify_patch_menu, "lock_unlock")
     
-    files_listbox = create_file_listbox(bottom_left_frame)
-    create_button_frame(bottom_right_frame, files_listbox)
+    files_listbox = create_file_listbox(bottom_left_frame, menu_type='lock_unlock')
+    #create_button_frame(bottom_right_frame, files_listbox)
     
     # Restore state if available
     lock_unlock_state = state_manager.get_state("lock_unlock")
@@ -365,12 +365,12 @@ def switch_to_patches_menu(root_widget=None) -> None:
         if not isinstance(widget, tk.Menu):
             widget.destroy()
             
-    top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root_widget)
+    top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root_widget, left_weight=6, right_weight=1)
     create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, 
                     switch_to_patches_menu, switch_to_modify_patch_menu, "patches")
     
     # Create a Treeview to display patches
-    patches_listbox = create_patches_treeview(bottom_left_frame)
+    patches_listbox = create_patches_treeview(bottom_left_frame, switch_to_modify_patch_menu)
     buttons_frame = create_button_frame_patches(bottom_right_frame, patches_listbox, switch_to_modify_patch_menu)
     username = config.get("username")
     
@@ -707,13 +707,13 @@ def setup_gui() -> tk.Tk:
         
     root.iconbitmap(icon_path)
     root.title("SVN Manager")
-    root.geometry("900x600")
+    root.geometry("1000x600")
 
     # Check for the latest version
     check_latest_version(root)
 
     # Initialize native topbar and menus
-    initialize_native_topbar(root)
+    initialize_native_topbar(root, APP_VERSION)
     
     # Check configuration before switching to initial menu
     config = load_config()

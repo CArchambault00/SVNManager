@@ -3,7 +3,7 @@ from tkinter import ttk
 from svn_operations import lock_files, unlock_files, get_all_locked_files
 from buttons_function import lock_selected_files, unlock_selected_files
 from patch_generation import generate_patch
-from buttons_function import insert_next_version, modify_patch, build_existing_patch, view_patch_files, view_selected_file_native_diff
+from buttons_function import insert_next_version, modify_patch, build_existing_patch, view_patch_files, view_selected_file_native_diff,deselect_all_rows, select_all_rows
 from patches_operations import refresh_patches, update_patch
 from config import load_config
 from db_handler import dbClass
@@ -37,23 +37,6 @@ def create_button_frame(parent, files_listbox):
     
     # Add separator before the View Diff button
     tk.Frame(parent, height=20).pack(side="top")
-    
-    # Add View Diff button
-    diff_button = tk.Button(parent, text="View Diff", command=lambda: view_selected_file_native_diff(files_listbox), background="#FCFF80", width=15)
-    diff_button.pack(side="top", pady=5)
-    
-    # Enable/disable View Diff button based on selection
-    def on_selection_change(event):
-        if len(files_listbox.selection()) == 1:
-            diff_button.config(state="normal")
-        else:
-            diff_button.config(state="disabled")
-    
-    # Bind selection change events
-    files_listbox.bind("<<TreeviewSelect>>", on_selection_change)
-    
-    # Initial state of the diff button (disabled by default)
-    diff_button.config(state="disabled")
 
 def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_state=None):
     ## Patch Version and description panel
@@ -164,21 +147,14 @@ def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_s
     locked_files_treeview.configure(xscrollcommand=h_scrollbar.set)
     h_scrollbar.pack(side="bottom", fill="x")
     
+    locked_files_treeview.bind("<Control-a>", lambda event: select_all_rows(event, locked_files_treeview))
+    locked_files_treeview.bind("<Button-1>", lambda event: deselect_all_rows(event, locked_files_treeview))
     locked_files_treeview.pack(side="left", fill="both", expand=True)
     
     # Create context menus using the create_context_menu function from create_component
     from create_component import create_context_menu
-    create_context_menu(files_listbox, "files")  # Create context menu for main treeview
-    create_context_menu(locked_files_treeview, "locked_files")  # Create context menu for locked files treeview
-
-    # Add a simple refresh button at the bottom of the locked files frame
-    refresh_button = tk.Button(
-        locked_files_frame, 
-        text="Refresh Locked Files", 
-        command=lambda: refresh_available_locked_files(locked_files_treeview, files_listbox),
-        background="#80DDFF"
-    )
-    refresh_button.pack(side="bottom", pady=5)
+    create_context_menu(files_listbox, menu_type="files")  # Create context menu for main treeview
+    create_context_menu(locked_files_treeview, menu_type="locked_files")  # Create context menu for locked files treeview
 
     # We won't call refresh_available_locked_files here, it will be called from the app.py
     
@@ -298,19 +274,8 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     
     # Create context menus using the create_context_menu function
     from create_component import create_context_menu
-    create_context_menu(files_listbox, "files")  # Create context menu for main treeview
-    create_context_menu(locked_files_treeview, "locked_files")  # Create context menu for locked files treeview
-
-    # Add a simple refresh button at the bottom of the locked files frame
-    refresh_button = tk.Button(
-        locked_files_frame, 
-        text="Refresh Locked Files", 
-        command=lambda: refresh_available_locked_files(locked_files_treeview, files_listbox),
-        background="#80DDFF"
-    )
-    refresh_button.pack(side="bottom", pady=5)
-
-    # We won't call refresh_available_locked_files here, it will be called from the app.py
+    create_context_menu(files_listbox, menu_type="files")  # Create context menu for main treeview
+    create_context_menu(locked_files_treeview, menu_type="locked_files")  # Create context menu for locked files treeview
     
     # Return widget references for state management
     return {
@@ -336,21 +301,6 @@ def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_
     # On patch version change, refresh the patches
     patch_version_prefixe.bind("<<ComboboxSelected>>", lambda event: refresh_patches(patches_listbox, False, patch_version_prefixe.get(), username))
 
-    # Remove "Refresh Patches" button
-
-    # Add a button to modify the selected patch
-    root = parent.winfo_toplevel()  # Get root window reference
-    tk.Button(parent, text="Modify Patch", 
-              command=lambda: modify_patch([patches_listbox.item(item, "values") for item in patches_listbox.selection()], 
-                                        lambda p: switch_to_modify_patch_menu(p, root)), 
-              background="#FF8080", width=15).pack(side="top", pady=5)
-
-    # Generate patch
-    tk.Button(parent, text="Build Patch", command=lambda: build_existing_patch([patches_listbox.item(item, "values") for item in patches_listbox.selection()]), background="#FCFF80", width=15).pack(side="top", pady=5)
-
-    # View patch files
-    tk.Button(parent, text="View Patch Files", command=lambda: view_patch_files([patches_listbox.item(item, "values") for item in patches_listbox.selection()]), background="#44FF80", width=15).pack(side="top", pady=5)
-    
     # Return widget references for state management
     return {
         "patch_version_prefixe": patch_version_prefixe

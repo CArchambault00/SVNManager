@@ -23,12 +23,12 @@ def insert_next_version(application_id, patch_version_entry):
         patch_version_entry.insert(0, new_version)
         patch_version_entry.config(state="normal")
 
-def deselect_all_files(event, files_listbox):
+def deselect_all_rows(event, files_listbox):
     if not files_listbox.identify_row(event.y):  # Check if click is on an empty area
         files_listbox.selection_remove(files_listbox.selection())
 
 
-def select_all_files(event, files_listbox):
+def select_all_rows(event, files_listbox):
     for item in files_listbox.get_children():
         files_listbox.selection_add(item)
 

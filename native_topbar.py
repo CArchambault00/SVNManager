@@ -63,7 +63,7 @@ def select_profile(config_menu, menu_bar, profile_menu, menu_manager):
         # Update profile menu
         update_profile_menu(profile_menu, profile_name)
 
-def initialize_native_topbar(root):
+def initialize_native_topbar(root, app_version):
     # Create the menu bar
     menu_bar = tk.Menu(root)
     menu_manager = MenuManager(menu_bar)
@@ -103,7 +103,7 @@ def initialize_native_topbar(root):
     help_menu = tk.Menu(menu_bar, tearoff=0)
     help_menu.add_command(
         label="About",
-        command=lambda: messagebox.showinfo("About", "SVN Manager v1.0")
+        command=lambda: messagebox.showinfo("About", f"SVN Manager v{app_version}\n\n")
     )
     
     help_menu.add_command(
