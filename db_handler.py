@@ -91,7 +91,7 @@ class dbClass:
         except oracledb.Error as e:
             messagebox.showerror("Database Error", f"Failed to connect to the database, Application will not work properly\n{e}")
             log_error(f"Database Error: {e}")
-            log_error(f"Date: {date.datetime.now()}")
+            log_error(f"Date: {datetime.now()}")
             log_error(f"Instant Client Path: {instantclient_path}\n")
             log_error(f"TNS_ADMIN: {os.environ['TNS_ADMIN']}\n")
             log_error(f"------------------------------")
