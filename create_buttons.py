@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from patch_generation import generate_patch
-from buttons_function import insert_next_version, deselect_all_files, select_all_files
+from buttons_function import insert_next_version, deselect_all_rows, select_all_rows
 from patches_operations import refresh_patches, update_patch
 from config import load_config
 from db_handler import dbClass
@@ -130,8 +130,8 @@ def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_s
         height=8  # Set a reasonable height for better visibility
     )
     
-    locked_files_treeview.bind("<Button-1>", lambda event: deselect_all_files(event, locked_files_treeview))
-    locked_files_treeview.bind("<Control-a>", lambda event: select_all_files(event, locked_files_treeview))
+    locked_files_treeview.bind("<Button-1>", lambda event: deselect_all_rows(event, locked_files_treeview))
+    locked_files_treeview.bind("<Control-a>", lambda event: select_all_rows(event, locked_files_treeview))
     for col_name, col_width in LISTBOX_COLUMNS:
         locked_files_treeview.heading(col_name, text=col_name)
         locked_files_treeview.column(col_name, width=col_width, stretch=tk.NO)

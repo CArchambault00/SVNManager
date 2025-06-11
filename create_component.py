@@ -68,7 +68,7 @@ def create_patches_treeview(parent: tk.Widget, switch_to_modify_patch_menu: Call
     for col_name, col_width in TREEVIEW_COLUMNS:
         treeview.heading(col_name, text=col_name)
         treeview.column(col_name, width=col_width, stretch=tk.NO)
-    treeview.bind("<Button-1>", lambda event: deselect_all_files(event, treeview))
+    treeview.bind("<Button-1>", lambda event: deselect_all_rows(event, treeview))
     add_scrollbars(treeview, parent)
     context_menu_manager.create_patches_menu(treeview, switch_to_modify_patch_menu)  # Pass the callback
     
