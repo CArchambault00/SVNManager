@@ -275,6 +275,10 @@ class dbClass:
     def remove_patch(self, patch_id: int):
         sql = "UPDATE PATCH_HEADER SET DELETED_YN = 'Y' WHERE PATCH_ID = :patch_id"
         self.execute_non_query(sql, {'patch_id': patch_id})
+    
+    def remove_patch_detail(self, patch_id:int):
+        sql = "REMOVE FROM PATCH_DETAIL WHERE PATCH_ID = :patch_id"
+        self.execute_non_query(sql, {'patch_id': patch_id})
 
     def rename_patch(self, patch_id: int, new_name: str):
         sql = "UPDATE PATCH_HEADER SET NAME = :new_name WHERE PATCH_ID = :patch_id"

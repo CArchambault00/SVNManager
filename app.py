@@ -14,9 +14,9 @@ from patches_operations import refresh_patches, refresh_patch_files
 from create_component import create_patches_treeview, create_file_listbox, create_top_frame
 from create_buttons import (
     create_button_frame, create_button_frame_patch, 
-    create_button_frame_modify_patch, create_button_frame_patches,
-    refresh_available_locked_files
+    create_button_frame_modify_patch, create_button_frame_patches
 )
+from context_menu import context_menu_manager
 from config import load_config, get_unset_var, log_error
 from native_topbar import initialize_native_topbar
 from version_operation import next_version
@@ -25,7 +25,7 @@ from text_widget_utils import get_text_content, ensure_text_widget_visible
 
 APP_VERSION = "1.0.20"
 
-def create_main_layout(root: tk.Tk, left_weight: int = 2, right_weight: int = 1) -> Tuple[tk.Frame, tk.Frame, tk.Frame]:
+def create_main_layout(root: tk.Tk, left_weight = 2, right_weight = 1) -> Tuple[tk.Frame, tk.Frame, tk.Frame]:
     """
     Create the main application layout with three frames.
     
@@ -166,13 +166,21 @@ def switch_to_lock_unlock_menu(root_widget=None) -> None:
     for widget in root_widget.winfo_children():
         if not isinstance(widget, tk.Menu):
             widget.destroy()
-            
-    top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root_widget, left_weight=2, right_weight=0)
+    
+    # Create a single main frame that fills the entire window
+    root_widget.grid_rowconfigure(1, weight=1)
+    root_widget.grid_columnconfigure(0, weight=1)
+    
+    top_frame = tk.Frame(root_widget, height=80, relief=tk.RIDGE, borderwidth=2)
+    top_frame.grid(row=0, column=0, sticky="nsew")
+    
+    main_frame = tk.Frame(root_widget, relief=tk.RIDGE, borderwidth=2)
+    main_frame.grid(row=1, column=0, sticky="nsew")
+    
     create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, 
                     switch_to_patches_menu, switch_to_modify_patch_menu, "lock_unlock")
     
-    files_listbox = create_file_listbox(bottom_left_frame, menu_type='lock_unlock')
-    #create_button_frame(bottom_right_frame, files_listbox)
+    files_listbox = create_file_listbox(main_frame, menu_name='lock_unlock')
     
     # Restore state if available
     lock_unlock_state = state_manager.get_state("lock_unlock")
@@ -261,18 +269,23 @@ def switch_to_patch_menu(root_widget=None) -> None:
         
         # Always refresh ONLY the locked files treeview
         if "locked_files_treeview" in buttons_frame:
-            refresh_available_locked_files(buttons_frame["locked_files_treeview"], files_listbox)
-            
-        
+            context_menu_manager.refresh_available_locked_files(
+                buttons_frame["locked_files_treeview"], 
+                files_listbox
+            )
+    
         # Create drag and drop callback
         def on_drop_with_state_preservation(event):
             from buttons_function import handle_drop
             handle_drop(event, files_listbox)
-            root = files_listbox.winfo_toplevel()  # Get root from the listbox widget
-            save_current_state(root)  # Pass root to save_current_state
+            root = files_listbox.winfo_toplevel()
+            save_current_state(root)
             if "locked_files_treeview" in buttons_frame:
-                refresh_available_locked_files(buttons_frame["locked_files_treeview"], files_listbox)
-        
+                context_menu_manager.refresh_available_locked_files(
+                    buttons_frame["locked_files_treeview"],
+                    files_listbox
+                )
+
         # Set up DnD safely
         def setup_dnd_safely(listbox, buttons_frame, callback) -> None:
             """
@@ -370,7 +383,10 @@ def switch_to_patches_menu(root_widget=None) -> None:
                     switch_to_patches_menu, switch_to_modify_patch_menu, "patches")
     
     # Create a Treeview to display patches
-    patches_listbox = create_patches_treeview(bottom_left_frame, switch_to_modify_patch_menu)
+    patches_listbox = create_patches_treeview(
+        bottom_left_frame,
+        lambda patch_info: switch_to_modify_patch_menu(patch_info, root_widget)
+    )
     buttons_frame = create_button_frame_patches(bottom_right_frame, patches_listbox, switch_to_modify_patch_menu)
     username = config.get("username")
     
@@ -486,7 +502,10 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
     # Update locked files treeview after layout is stable
     if "locked_files_treeview" in buttons_frame:
         root_widget.update()
-        refresh_available_locked_files(buttons_frame["locked_files_treeview"], files_listbox)
+        context_menu_manager.refresh_available_locked_files(
+            buttons_frame["locked_files_treeview"],
+            files_listbox
+        )
     
     # Create drag and drop callback
     def on_drop_with_state_preservation(event):
@@ -494,12 +513,15 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
         handle_drop(event, files_listbox)
         
         if state_manager.current_menu == "modify_patch":
-            root = files_listbox.winfo_toplevel()  # Get root from the listbox widget
-            save_current_state(root)  # Pass root to save_current_state
+            root = files_listbox.winfo_toplevel()
+            save_current_state(root)
             
             if "locked_files_treeview" in buttons_frame:
-                refresh_available_locked_files(buttons_frame["locked_files_treeview"], files_listbox)
-    
+                context_menu_manager.refresh_available_locked_files(
+                    buttons_frame["locked_files_treeview"],
+                    files_listbox
+                )
+
     # Set up DnD safely
     def setup_dnd_safely(listbox, buttons_frame, callback) -> None:
         """

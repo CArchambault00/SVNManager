@@ -1,16 +1,15 @@
 import tkinter as tk
 from tkinter import ttk
-from svn_operations import lock_files, unlock_files, get_all_locked_files
-from buttons_function import lock_selected_files, unlock_selected_files
 from patch_generation import generate_patch
-from buttons_function import insert_next_version, modify_patch, build_existing_patch, view_patch_files, view_selected_file_native_diff,deselect_all_rows, select_all_rows
+from buttons_function import insert_next_version, deselect_all_files, select_all_files
 from patches_operations import refresh_patches, update_patch
 from config import load_config
 from db_handler import dbClass
 from tkinter import messagebox
 from profiles import get_profile
-from create_component import LISTBOX_COLUMNS, add_scrollbars  # Import add_scrollbars from create_component
-from text_widget_utils import ensure_text_widget_visible, get_text_content
+from create_component import LISTBOX_COLUMNS  # Import add_scrollbars from create_component
+from text_widget_utils import ensure_text_widget_visible
+from context_menu import context_menu_manager
 
 def add_scrollbars(widget: ttk.Treeview, parent: tk.Widget) -> None:
     """
@@ -27,12 +26,9 @@ def add_scrollbars(widget: ttk.Treeview, parent: tk.Widget) -> None:
 def create_button_frame(parent, files_listbox):
     
     tk.Frame(parent, height=20).pack(side="top")
-    tk.Button(parent, text="Lock All", command=lambda: lock_files([files_listbox.item(item, "values")[2] for item in files_listbox.get_children()], files_listbox), background="#FF8080", width=15).pack(side="top", pady=5)
-    tk.Button(parent, text="Lock Selected", command=lambda: lock_selected_files(files_listbox), background="#FF8080", width=15).pack(side="top", pady=5)
+   
     tk.Frame(parent, height=20).pack(side="top")
-    tk.Button(parent, text="Unlock All", command=lambda: unlock_files([files_listbox.item(item, "values")[2] for item in files_listbox.get_children()], files_listbox), background="#44FF80", width=15).pack(side="top", pady=5)
-    tk.Button(parent, text="Unlock Selected", command=lambda: unlock_selected_files(files_listbox), background="#44FF80", width=15).pack(side="top", pady=5)
-    
+   
     # Remove "Refresh Locked Files" button
     
     # Add separator before the View Diff button
@@ -120,7 +116,7 @@ def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_s
             patch_version_entry.get(), 
             patch_description_entry.get("1.0", tk.END).strip(), 
             unlock_files.get()
-        ), 
+        ),
         background="#FF8080"
     )
     generate_btn.pack(side="right", padx=5, pady=5)
@@ -134,6 +130,8 @@ def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_s
         height=8  # Set a reasonable height for better visibility
     )
     
+    locked_files_treeview.bind("<Button-1>", lambda event: deselect_all_files(event, locked_files_treeview))
+    locked_files_treeview.bind("<Control-a>", lambda event: select_all_files(event, locked_files_treeview))
     for col_name, col_width in LISTBOX_COLUMNS:
         locked_files_treeview.heading(col_name, text=col_name)
         locked_files_treeview.column(col_name, width=col_width, stretch=tk.NO)
@@ -151,10 +149,18 @@ def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_s
     locked_files_treeview.bind("<Button-1>", lambda event: deselect_all_rows(event, locked_files_treeview))
     locked_files_treeview.pack(side="left", fill="both", expand=True)
     
-    # Create context menus using the create_context_menu function from create_component
-    from create_component import create_context_menu
-    create_context_menu(files_listbox, menu_type="files")  # Create context menu for main treeview
-    create_context_menu(locked_files_treeview, menu_type="locked_files")  # Create context menu for locked files treeview
+    # Create context menus
+    context_menu_manager.create_files_menu(files_listbox, menu_name='patch_files')  # Create context menu for main treeview
+    context_menu_manager.create_files_menu(locked_files_treeview, menu_name='locked_files')  # Create context menu for locked files treeview
+
+    # Add a simple refresh button at the bottom of the locked files frame
+    refresh_button = tk.Button(
+        locked_files_frame, 
+        text="Refresh Locked Files", 
+        command=lambda: context_menu_manager.refresh_available_locked_files(locked_files_treeview, files_listbox),
+        background="#80DDFF"
+    )
+    refresh_button.pack(side="bottom", pady=5)
 
     # We won't call refresh_available_locked_files here, it will be called from the app.py
     
@@ -193,6 +199,7 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     next_btn = tk.Button(patch_version_frame, text="Next", 
                          command=lambda: insert_next_version(patch_version_prefixe.get(), patch_version_entry), 
                          background="#80DDFF")
+    
     next_btn.pack(side="right", padx=5, pady=5)
 
     # Patch Description section with proper rendering
@@ -272,10 +279,20 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     
     locked_files_treeview.pack(side="left", fill="both", expand=True)
     
-    # Create context menus using the create_context_menu function
-    from create_component import create_context_menu
-    create_context_menu(files_listbox, menu_type="files")  # Create context menu for main treeview
-    create_context_menu(locked_files_treeview, menu_type="locked_files")  # Create context menu for locked files treeview
+    # Create context menus
+    context_menu_manager.create_files_menu(files_listbox, menu_name="patch_files")  # Create context menu for main treeview
+    context_menu_manager.create_files_menu(locked_files_treeview, menu_name="lock_files")  # Create context menu for locked files treeview
+
+    # Add a simple refresh button at the bottom of the locked files frame
+    refresh_button = tk.Button(
+        locked_files_frame, 
+        text="Refresh Locked Files", 
+        command=lambda: context_menu_manager.refresh_available_locked_files(locked_files_treeview, files_listbox),
+        background="#80DDFF"
+    )
+    refresh_button.pack(side="bottom", pady=5)
+
+    # We won't call refresh_available_locked_files here, it will be called from the app.py
     
     # Return widget references for state management
     return {
@@ -300,69 +317,8 @@ def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_
     username = config.get("username")
     # On patch version change, refresh the patches
     patch_version_prefixe.bind("<<ComboboxSelected>>", lambda event: refresh_patches(patches_listbox, False, patch_version_prefixe.get(), username))
-
+    
     # Return widget references for state management
     return {
         "patch_version_prefixe": patch_version_prefixe
     }
-
-def refresh_available_locked_files(locked_files_treeview, main_files_treeview):
-    """
-    Refresh the list of locked files, excluding those already in the main treeview
-    """
-    try:
-        # Clear the locked files treeview
-        locked_files_treeview.delete(*locked_files_treeview.get_children())
-        
-        # Get all locked files
-        locked_files = get_all_locked_files()
-        
-        # Get the list of files already in the main treeview
-        existing_files = set()
-        for item in main_files_treeview.get_children():
-            file_path = main_files_treeview.item(item, "values")[2]
-            existing_files.add(file_path)
-        
-        # Add locked files that aren't already in the main treeview
-        for file_path, revision, lock_date in locked_files:
-            if file_path not in existing_files:
-                locked_files_treeview.insert(
-                    "", "end",
-                    values=("locked", revision, file_path, lock_date)
-                )
-                
-        # Make sure the widgets are updated properly
-        locked_files_treeview.update()
-    except Exception as e:
-        print(f"Error refreshing locked files: {e}")
-        messagebox.showerror("Error", f"Failed to refresh available locked files:\n{e}")
-
-def add_selected_to_main_treeview(locked_files_treeview, main_files_treeview):
-    """
-    Add selected files from the locked files treeview to the main treeview
-    """
-    selected_items = locked_files_treeview.selection()
-    if not selected_items:
-        messagebox.showwarning("No Selection", "Please select files to add")
-        return
-    
-    # Get the list of files already in the main treeview
-    existing_files = set()
-    for item in main_files_treeview.get_children():
-        file_path = main_files_treeview.item(item, "values")[2]
-        existing_files.add(file_path)
-    
-    # Add selected files to main treeview if they're not already there
-    files_added = 0
-    for item in selected_items:
-        values = locked_files_treeview.item(item, "values")
-        file_path = values[2]
-        
-        if file_path not in existing_files:
-            main_files_treeview.insert("", "end", values=values)
-            files_added += 1
-            existing_files.add(file_path)
-    
-    # Remove the added files from the locked files treeview
-    for item in selected_items:
-        locked_files_treeview.delete(item)

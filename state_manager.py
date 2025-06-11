@@ -19,7 +19,8 @@ class StateManager:
             },
             "patches": {
                 "selected_patch": None,
-                "selected_prefix": "S"
+                "selected_prefix": "S",  # Default prefix
+                "prefix_history": []  # Track prefix history
             },
             "modify_patch": {
                 "selected_files": [],
@@ -124,6 +125,20 @@ class StateManager:
         if self.refresh_timer:
             root_widget.after_cancel(self.refresh_timer)
             self.refresh_timer = None
+
+    def update_prefix_selection(self, prefix: str) -> None:
+        """Update the selected prefix and maintain selection history."""
+        if prefix and self.states["patches"]["selected_prefix"] != prefix:
+            # Add current prefix to history if changing
+            current = self.states["patches"]["selected_prefix"]
+            if current:
+                self.states["patches"]["prefix_history"].append(current)
+            self.states["patches"]["selected_prefix"] = prefix
+            
+    def get_last_prefix(self) -> str:
+        """Get the last used prefix or default."""
+        history = self.states["patches"]["prefix_history"]
+        return history[-1] if history else self.states["patches"]["selected_prefix"]
 
 # Create a global instance
 state_manager = StateManager()

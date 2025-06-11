@@ -19,29 +19,35 @@ def refresh_patches(treeview, temp, application_id, username):
     """
     Refresh the patches displayed in the Treeview.
     """
-    
     db = dbClass()
-    
+
     # Clear existing items
     for item in treeview.get_children():
         treeview.delete(item)
 
     patch_info_dict.clear()
-    
+
     # Fetch patches from the database
     patches = db.get_patch_list(temp, application_id)
     # Insert patches into the Treeview
     for patch in patches:
+        # Replace None or empty fields with ""
+        name = patch.get("NAME") or ""
+        comments = patch.get("COMMENTS") or ""
+        patch_size = patch.get("PATCH_SIZE") or 0
+        user_id = patch.get("USER_ID") or ""
+        creation_date = patch.get("CREATION_DATE") or ""
+        checklist_count = patch.get("CHECK_LIST_COUNT") or ""
 
-        patch_info_dict[patch["NAME"]] = patch
+        patch_info_dict[name] = patch
 
         treeview.insert("", "end", values=(
-            patch["NAME"], 
-            patch["COMMENTS"], 
-            patch["PATCH_SIZE"], 
-            patch["USER_ID"], 
-            patch["CREATION_DATE"], 
-            patch["CHECK_LIST_COUNT"]
+            name,
+            comments,
+            patch_size,
+            user_id,
+            creation_date,
+            checklist_count
         ))
 
 def refresh_patches_dict(temp, application_id):
@@ -292,6 +298,7 @@ def remove_patch(patch_info):
         # Remove the patch from the database
         db.conn.begin()
         db.remove_patch(patch_id)
+        db.remove_patch_details(patch_id)
         db.conn.commit()
         
         # Log the successful removal
