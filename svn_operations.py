@@ -451,6 +451,7 @@ def view_file_native_diff(file_path):
     try:
         config = load_config()
         svn_path = config.get("svn_path")
+        print(f"Opening diff for file: {file_path} in SVN path: {svn_path}")
         full_path = os.path.join(svn_path, file_path)
         
         # Method 1: Try TortoiseSVN first (best visual diff on Windows)
