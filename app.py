@@ -52,13 +52,23 @@ def create_main_layout(root: tk.Tk, left_weight = 2, right_weight = 1) -> Tuple[
 
     # Prevent bottom_left_frame from exceeding 2/3 of the width
     def enforce_ratio(event=None):
-        total_width = root.winfo_width()
-        max_left_width = int(total_width * (2 / 3))
-        bottom_left_frame.config(width=max_left_width)
-        bottom_left_frame.update_idletasks()
+        if not bottom_left_frame.winfo_exists() or not bottom_right_frame.winfo_exists():
+            root.unbind("<Configure>")  # Unbind if frames no longer exist
+            return
+        try:
+            total_width = root.winfo_width()
+            max_left_width = int(total_width * (2 / 3))
+            bottom_left_frame.config(width=max_left_width)
+            bottom_left_frame.update_idletasks()
+        except tk.TclError:
+            root.unbind("<Configure>")  # Unbind on error
 
-    root.bind("<Configure>", enforce_ratio)
-
+    # Store the binding ID so we can unbind it later
+    binding_id = root.bind("<Configure>", enforce_ratio)
+    
+    # Store the binding ID in the frames for later cleanup
+    bottom_left_frame.enforce_ratio_binding = binding_id
+    
     return top_frame, bottom_left_frame, bottom_right_frame
 
 
@@ -166,21 +176,13 @@ def switch_to_lock_unlock_menu(root_widget=None) -> None:
     for widget in root_widget.winfo_children():
         if not isinstance(widget, tk.Menu):
             widget.destroy()
-    
-    # Create a single main frame that fills the entire window
-    root_widget.grid_rowconfigure(1, weight=1)
-    root_widget.grid_columnconfigure(0, weight=1)
-    
-    top_frame = tk.Frame(root_widget, height=80, relief=tk.RIDGE, borderwidth=2)
-    top_frame.grid(row=0, column=0, sticky="nsew")
-    
-    main_frame = tk.Frame(root_widget, relief=tk.RIDGE, borderwidth=2)
-    main_frame.grid(row=1, column=0, sticky="nsew")
-    
+            
+    top_frame, bottom_left_frame, bottom_right_frame = create_main_layout(root_widget, left_weight=2, right_weight=0)
     create_top_frame(top_frame, switch_to_lock_unlock_menu, switch_to_patch_menu, 
                     switch_to_patches_menu, switch_to_modify_patch_menu, "lock_unlock")
     
-    files_listbox = create_file_listbox(main_frame, menu_name='lock_unlock')
+    files_listbox = create_file_listbox(bottom_left_frame, menu_name='lock_unlock')
+    #create_button_frame(bottom_right_frame, files_listbox)
     
     # Restore state if available
     lock_unlock_state = state_manager.get_state("lock_unlock")
@@ -315,6 +317,7 @@ def switch_to_patch_menu(root_widget=None) -> None:
                     return True
                 except (tk.TclError, AttributeError) as e:
                     print(f"DnD binding attempt failed, retrying... ({e})")
+                    log_error(f"DnD binding attempt failed, retrying... ({e})")
                     try:
                         listbox.after(100, schedule_dnd_binding)
                     except tk.TclError:
@@ -354,6 +357,7 @@ def restore_patch_form_state(buttons_frame: dict, state: dict) -> None:
             )
     except Exception as e:
         print(f"Error restoring patch form state: {e}")
+        log_error(f"Error restoring patch form state: {e}")
 
 
 def switch_to_patches_menu(root_widget=None) -> None:
@@ -551,6 +555,7 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
                 return True
             except (tk.TclError, AttributeError) as e:
                 print(f"DnD binding attempt failed, retrying... ({e})")
+                log_error(f"DnD binding attempt failed, retrying... ({e})")
                 try:
                     listbox.after(100, schedule_dnd_binding)
                 except tk.TclError:
@@ -705,6 +710,7 @@ def setup_dnd_safely(listbox, buttons_frame, callback) -> None:
             return True
         except (tk.TclError, AttributeError) as e:
             print(f"DnD binding attempt failed, retrying... ({e})")
+            log_error(f"DnD binding attempt failed, retrying... ({e})")
             try:
                 listbox.after(100, schedule_dnd_binding)
             except tk.TclError:

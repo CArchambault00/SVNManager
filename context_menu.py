@@ -8,7 +8,7 @@ from patches_operations import (
     refresh_patches, remove_patch, view_files_from_patch,
     build_patch, get_full_patch_info
 )
-from config import load_config
+from config import load_config, log_error
 from buttons_function import next_version, view_selected_file_native_diff
 
 class ContextMenuManager:
@@ -197,6 +197,7 @@ class ContextMenuManager:
         """Handle patch modification."""
         if not self.switch_callback:  # Check for callback
             print("Warning: No switch_callback set for modify_patch")
+            log_error("Warning: No switch_callback set for modify_patch")
             return
             
         selected = treeview.selection()
@@ -284,6 +285,7 @@ class ContextMenuManager:
             
         except Exception as e:
             print(f"Error refreshing locked files: {e}")
+            log_error(f"Error refreshing locked files: {e}")
             messagebox.showerror("Error", f"Failed to refresh locked files:\n{e}")
 
     def _find_main_treeview(self, widget):

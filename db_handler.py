@@ -34,6 +34,7 @@ class DatabaseConnection:
             client_path = os.path.join(base_path, "instantclient_12_1")
             oracledb.init_oracle_client(lib_dir=client_path)
         except Exception as e:
+            print(f"Failed to initialize Oracle client: {e}")
             log_error(f"Failed to initialize Oracle client: {e}")
             raise DatabaseError(f"Oracle client initialization failed: {e}")
 
@@ -55,6 +56,7 @@ class DatabaseConnection:
             )
         except oracledb.Error as e:
             error_msg = f"Database connection failed: {e}"
+            print(error_msg)
             log_error(error_msg)
             messagebox.showerror("Database Error", error_msg)
             raise DatabaseError(error_msg)

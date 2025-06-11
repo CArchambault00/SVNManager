@@ -5,6 +5,7 @@ import os
 from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision, get_file_revision_batch, get_file_head_revision, get_file_head_revision_batch
 from db_handler import dbClass
 import time
+from config import log_error
 
 def get_md5_checksum(file_path):
     """Returns the MD5 checksum of a given file."""
@@ -39,8 +40,10 @@ def cleanup_files(patch_version_folder):
                 func(path)
             except Exception as e:
                 print(f"Warning: Could not remove {path}: {e}")
+                log_error(f"Warning: Could not remove {path}: {e}")
         else:
             print(f"Warning: Could not remove {path}: {exc_info[1]}")
+            log_error(f"Warning: Could not remove {path}: {exc_info[1]}")
     
     max_retries = 3
     retry_delay = 0.5  # seconds
@@ -52,9 +55,11 @@ def cleanup_files(patch_version_folder):
         except Exception as e:
             if attempt < max_retries - 1:
                 print(f"Retry {attempt + 1}/{max_retries} cleaning up {patch_version_folder}: {e}")
+                log_error(f"Retry {attempt + 1}/{max_retries} cleaning up {patch_version_folder}: {e}")
                 time.sleep(retry_delay)
             else:
                 print(f"Warning: Could not fully clean up {patch_version_folder}: {e}")
+                log_error(f"Warning: Could not fully clean up {patch_version_folder}: {e}")
 
 def create_depend_txt(db_handler, patch_version_folder, patch_id):
     try:
@@ -329,6 +334,7 @@ def get_md5_checksum_batch(files):
         except Exception as e:
             results[file_path] = None
             print(f"Error calculating MD5 for {file_path}: {e}")
+            log_error(f"Error calculating MD5 for {file_path}: {e}")
     return results
 
 def create_patch_files_batch(files, svn_path, patch_version_folder):

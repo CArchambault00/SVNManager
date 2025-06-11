@@ -37,7 +37,6 @@ def next_version(application_id: str) -> Optional[str]:
     try:
         db = dbClass()
         max_version = db.get_max_version(application_id)
-        print(f"Max version retrieved: {max_version}")
         if not max_version:
             messagebox.showerror("Error", "Failed to retrieve the max version")
             return None

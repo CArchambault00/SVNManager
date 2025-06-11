@@ -132,6 +132,9 @@ def build_patch(patch_info):
         db.conn.rollback()
         cleanup_files(patch_version_folder)
         tk.messagebox.showerror("Error", f"Failed to build patch: {e}")
+        print(f"Failed to build patch: {str(e)}")
+        print(f"Date:" + date.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        print(f"------------------------------")
         log_error(f"Failed to build patch: {str(e)}")
         log_error(f"Date:" + date.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         log_error(f"------------------------------")
@@ -186,9 +189,17 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
     cleanup_files(patch_version_folder)
     
     try:
+        if not patch_version_entry:
+            messagebox.showerror("Error", "Patch version is required!")
+            return
+        
+        if not patch_description:
+            messagebox.showerror("Error", "Patch description is required!")
+            return
+
         if not selected_files or len(selected_files) == 0:
             if not messagebox.askyesno("No Files Selected", 
-                                     "No files selected. Do you want to modify the patch to remove the files?"):
+                                     "No files selected. Do you want to modify the patch to have no files?"):
                 return
         
         os.makedirs(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), exist_ok=True)
@@ -249,6 +260,7 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         # Clean up any partially created files on error
         cleanup_files(patch_version_folder)
         error_msg = f"Failed to update patch: {str(e)}"
+        print(error_msg)
         log_error(error_msg, include_stack=True)
         tk.messagebox.showerror("Error", error_msg)
 
@@ -310,6 +322,7 @@ def remove_patch(patch_info):
     except Exception as e:
         db.conn.rollback()
         error_msg = f"Failed to remove patch: {str(e)}"
+        print(error_msg)
         log_error(error_msg, include_stack=True)
         messagebox.showerror("Error", error_msg)
         return False

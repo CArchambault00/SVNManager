@@ -26,9 +26,14 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
             messagebox.showerror("Error", "Patch version is required!")
             return
         
+        if not patch_description:
+            messagebox.showerror("Error", "Patch description is required!")
+            return
+        
         if not selected_files or len(selected_files) == 0:
             if not messagebox.askyesno("No Files Selected", "No files selected. Do you want to create an empty patch?"):
                 return
+            
         
         os.makedirs(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), exist_ok=True)
         
@@ -84,5 +89,6 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         db.conn.rollback()
         cleanup_files(patch_version_folder)
         error_msg = f"Failed to create patch: {str(e)}"
+        print(error_msg)
         log_error(error_msg, include_stack=True)
         messagebox.showerror("Error", error_msg)

@@ -72,6 +72,7 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True, batch_size=50):
                 messages.append(f"The following files have newer versions:\n\n{update_msg}")
 
             error_msg = "Lock/Unlock failed:\n" + "\n".join(messages)
+            print(error_msg)
             log_error(error_msg)
             raise Exception(error_msg)
 
@@ -80,6 +81,7 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True, batch_size=50):
         messagebox.showinfo("Success", f"Files {'locked' if lock else 'unlocked'} successfully!")
     except Exception as e:
         error_msg = f"Failed to {'lock' if lock else 'unlock'} files.\n\n{e}"
+        print(error_msg)
         log_error(error_msg, include_stack=True)
         messagebox.showerror("Error", error_msg)
 
@@ -176,6 +178,7 @@ def commit_files_batch(selected_files, unlock_files, batch_size=50):
         log_success("SVN Commit", success_details)
     except Exception as e:
         error_msg = f"Failed to commit files batch: {e}"
+        print(error_msg)
         log_error(error_msg, include_stack=True)
         raise Exception(error_msg)
 
@@ -206,6 +209,7 @@ def get_file_info_batch(files, batch_size=50):
             else:
                 results[file] = (False, "", "", "")
                 print(f"Skipping non-existent or system file: {file}")
+                log_error(f"Skipping non-existent or system file: {file}")
         
         if not valid_files:
             continue
@@ -253,13 +257,16 @@ def get_file_info_batch(files, batch_size=50):
                         results[file] = (False, "", "", "")
                 else:
                     print(f"Warning: Could not get info for {file}: {result.stderr}")
+                    log_error(f"Warning: Could not get info for {file}: {result.stderr}")
                     results[file] = (False, "", "", "")
                     
             except ET.ParseError:
                 print(f"Warning: XML parsing error for {file}")
+                log_error(f"Warning: XML parsing error for {file}")
                 results[file] = (False, "", "", "")
             except Exception as e:
                 print(f"Error getting info for {file}: {e}")
+                log_error(f"Error getting info for {file}: {e}")
                 results[file] = (False, "", "", "")
 
     return results
@@ -293,6 +300,7 @@ def get_file_revision_batch(files, batch_size=50):
             else:
                 results[file] = ""
                 print(f"Skipping non-existent or system file: {file}")
+                log_error(f"Skipping non-existent or system file: {file}")
         
         if not valid_files:
             continue
@@ -308,10 +316,12 @@ def get_file_revision_batch(files, batch_size=50):
                     results[file] = revision
                 else:
                     print(f"Warning: Could not get revision for {file}: {result.stderr}")
+                    log_error(f"Warning: Could not get revision for {file}: {result.stderr}")
                     results[file] = ""
                     
             except Exception as e:
                 print(f"Error getting revision for {file}: {e}")
+                log_error(f"Error getting revision for {file}: {e}")
                 results[file] = ""
                 
     return results
@@ -412,6 +422,7 @@ def get_file_head_revision_batch(files, batch_size=50):
             else:
                 results[file] = ""
                 print(f"Skipping non-existent or system file: {file}")
+                log_error(f"Skipping non-existent or system file: {file}")
         
         if not valid_files:
             continue
@@ -427,10 +438,12 @@ def get_file_head_revision_batch(files, batch_size=50):
                     results[file] = revision
                 else:
                     print(f"Warning: Could not get HEAD revision for {file}: {result.stderr}")
+                    log_error(f"Warning: Could not get HEAD revision for {file}: {result.stderr}")
                     results[file] = ""
                     
             except Exception as e:
                 print(f"Error getting HEAD revision for {file}: {e}")
+                log_error(f"Error getting HEAD revision for {file}: {e}")
                 results[file] = ""
                 
     return results
@@ -451,7 +464,6 @@ def view_file_native_diff(file_path):
     try:
         config = load_config()
         svn_path = config.get("svn_path")
-        print(f"Opening diff for file: {file_path} in SVN path: {svn_path}")
         full_path = os.path.join(svn_path, file_path)
         
         # Method 1: Try TortoiseSVN first (best visual diff on Windows)
@@ -471,6 +483,7 @@ def view_file_native_diff(file_path):
             pass
         except Exception as e:
             print(f"TortoiseSVN error: {e}")
+            log_error(f"TortoiseSVN error: {e}")
         
         # Method 2: Try using SVN diff with system-configured diff tool
         try:
@@ -483,6 +496,7 @@ def view_file_native_diff(file_path):
                 return  # SVN diff opened successfully
         except Exception as e:
             print(f"SVN diff error: {e}")
+            log_error(f"SVN diff error: {e}")
             
         # Method 3: If previous methods failed, get the diff content and display in a window
         try:
