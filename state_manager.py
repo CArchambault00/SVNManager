@@ -65,11 +65,11 @@ class StateManager:
     def clear_state(self, menu_name=None):
         """
         Clear the state for a specific menu or all menus if menu_name is None.
-        Preserves original_patch_details for modify_patch menu.
+        Preserves patch_details and original_patch_details for modify_patch menu.
         """
         if menu_name:
             if menu_name in self.states:
-                # Preserve both current and original patch details when needed
+                # Preserve patch details for modify_patch menu
                 patch_details = None
                 original_details = None
                 if menu_name == "modify_patch":
@@ -95,8 +95,23 @@ class StateManager:
                     if original_details:
                         self.states[menu_name]["original_patch_details"] = original_details
         else:
+            # When clearing all states, still preserve modify_patch details
+            patch_details = None
+            original_details = None
+            if "modify_patch" in self.states:
+                patch_details = self.states["modify_patch"].get("patch_details")
+                original_details = self.states["modify_patch"].get("original_patch_details")
+            
+            # Clear all states
             for menu in self.states:
                 self.clear_state(menu)
+            
+            # Restore modify_patch details if they existed
+            if patch_details:
+                if "modify_patch" not in self.states:
+                    self.states["modify_patch"] = {}
+                self.states["modify_patch"]["patch_details"] = patch_details
+                self.states["modify_patch"]["original_patch_details"] = original_details
 
     def set_loading(self, loading: bool) -> None:
         """Set the loading state."""

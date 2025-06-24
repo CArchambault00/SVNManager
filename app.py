@@ -6,7 +6,7 @@ import webbrowser
 import tkinter as tk
 from tkinter import messagebox
 from tkinterdnd2 import TkinterDnD
-from typing import Tuple, Optional, Dict, Any, List
+from typing import Tuple, Optional, Dict, Any, List, Callable
 
 # Local modules
 from svn_operations import refresh_locked_files, get_file_info, refresh_file_status_version
@@ -566,6 +566,46 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
     
     # Set menu state
     state_manager.current_menu = "modify_patch"
+
+
+def create_top_frame(
+    parent: tk.Widget,
+    switch_to_lock_unlock_menu: Callable,
+    switch_to_patch_menu: Callable,
+    switch_to_patches_menu: Callable,
+    switch_to_modify_patch_menu: Callable,
+    selected_menu: str,
+) -> tk.Frame:
+    """
+    Create the top frame with navigation buttons.
+    """
+    menu_button_frame = tk.Frame(parent)
+    menu_button_frame.pack(fill="x", pady=5)
+
+    # Button configurations
+    modify_patch_state = state_manager.get_state("modify_patch")
+    patch_details = modify_patch_state.get("patch_details") if modify_patch_state else None
+
+    buttons = [
+        ("Lock/Unlock", switch_to_lock_unlock_menu, "lock_unlock"),
+        ("Create Patch", switch_to_patch_menu, "patch"),
+        ("Patches List", switch_to_patches_menu, "patches"),
+        ("Modify Patch", 
+         lambda: switch_to_modify_patch_menu(patch_details) if patch_details else switch_to_patches_menu(), 
+         "modify_patch"),
+    ]
+
+    for text, command, menu in buttons:
+        is_selected = selected_menu == menu
+        tk.Button(
+            menu_button_frame,
+            text=text,
+            command=command,
+            background="grey" if is_selected else None,
+            width=15,
+        ).pack(side="left", padx=5, pady=5)
+
+    return menu_button_frame
 
 
 def find_listbox_or_treeview(parent):

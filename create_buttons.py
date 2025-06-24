@@ -281,7 +281,7 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     
     # Create context menus
     context_menu_manager.create_files_menu(files_listbox, menu_name="patch_files")  # Create context menu for main treeview
-    context_menu_manager.create_files_menu(locked_files_treeview, menu_name="lock_files")  # Create context menu for locked files treeview
+    context_menu_manager.create_files_menu(locked_files_treeview, menu_name="locked_files")  # Create context menu for locked files treeview
 
     # Add a simple refresh button at the bottom of the locked files frame
     refresh_button = tk.Button(
