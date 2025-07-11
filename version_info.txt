@@ -5,8 +5,8 @@
 #
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 22, 0),
-    prodvers=(1, 0, 22, 0),
+    filevers=(1, 0, 21, 0),
+    prodvers=(1, 0, 21, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -22,12 +22,12 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'CyFrame'),
             StringStruct('FileDescription', 'SVN Manager'),
-            StringStruct('FileVersion', '1.0.22.0'),
+            StringStruct('FileVersion', '1.0.21.0'),
             StringStruct('InternalName', 'SVNManager'),
             StringStruct('LegalCopyright', 'Copyright (C) 2025 CyFrame'),
             StringStruct('OriginalFilename', 'SVNManager.exe'),
             StringStruct('ProductName', 'SVN Manager'),
-            StringStruct('ProductVersion', '1.0.22.0')
+            StringStruct('ProductVersion', '1.0.21.0')
           ]
         )
       ]
