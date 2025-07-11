@@ -280,12 +280,15 @@ def create_main_sql_file(patch_version_folder, files, patch_name=None, version_i
         
         if version_info:
             major, minor, revision = version_info
+            # Ensure revision is always 4 digits, zero-padded
+            revision = str(revision).zfill(4)
             sql_commands.append(
                 f"CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION('{application_id}',{major},{minor},{revision},'&&PERSON');"
             )
         elif patch_name:
             version = extract_build_number(patch_name)
             application_id, major, minor, revision = version.split(",")
+            revision = str(revision).zfill(4)
             sql_commands.append(
                 f"CALL CMATC.PKG_VERSION_CONTROL.SETCURRENTVERSION({application_id},{major},{minor},{revision},'&&PERSON');"
             )

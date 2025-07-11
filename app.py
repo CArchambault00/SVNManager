@@ -692,7 +692,7 @@ def check_latest_version(root: tk.Tk) -> None:
                                  f"A new version ({latest_version}) is available.\nDo you want to open the download page?"):
                 release_url = f"https://github.com/CArchambault00/SVNManager/releases/tag/{latest_version}"
                 webbrowser.open(release_url)
-            #sys.exit(0)
+            sys.exit(0)
 
     except Exception as e:
         error_msg = f"Failed to check for latest version: {e}"
