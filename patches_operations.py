@@ -310,7 +310,7 @@ def remove_patch(patch_info):
         # Remove the patch from the database
         db.conn.begin()
         db.remove_patch(patch_id)
-        db.remove_patch_details(patch_id)
+        # db.remove_patch_details(patch_id)
         db.conn.commit()
         
         # Log the successful removal
