@@ -432,10 +432,10 @@ class dbClass:
         sql = """
         SELECT COUNT(*) AS COUNT
         FROM PATCH_HEADER
-        WHERE NAME = :patch_name
+        WHERE NAME LIKE :patch_name
         AND DELETED_YN = 'N'
         """
-        result = self.execute_query(sql, {'patch_name': f"{patch_prefix}{patch_version}"})
+        result = self.execute_query(sql, {'patch_name': f"%{patch_prefix}{patch_version}%"})
         return result[0]['COUNT'] > 0
 
     def __del__(self):

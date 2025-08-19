@@ -396,7 +396,7 @@ class ProfileDialog:
 
         # S prefix must be used only at the root
         if not is_root and patch_prefix == 'S':
-            messagebox.showerror("Error", "Prefix 'S' is only allowed at the root of the SVN repository.")
+            messagebox.showerror("Error", "Prefix 'S' only allow SVN Path to be set at the root of the repository.")
             return
 
         # Other prefixes (not 'S') must be used only inside Projects

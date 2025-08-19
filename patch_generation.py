@@ -23,6 +23,20 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         svn_path = config.get("svn_path")
         username = config.get("username")
 
+        if not '-' in patch_version or patch_version.count('-') != 1 or patch_version.split('-')[1] == '':
+            messagebox.showerror("Error", "Invalid patch version format! Must contain '-*'\n" \
+            "Following those patterns (Can be combined):\n" \
+            "Web changes :\n" \
+            "*-W0 -> web page, change function, logic(not visible for user)\n" \
+            "*-W1 -> add/change elements on the web page..\n" \
+            "*-W2 -> add/change business logic.. *Breaking change*\n\n" \
+            "Server/Database changes :\n" \
+            "*-S0 -> min. logical Change; New Label; System Parameter; New type report.\n" \
+            "*-S1 -> new function, new param\n" \
+            "*-S2 -> add Param; delete Param; alter table; change column size;\n" \
+            "")
+            return
+
         if not patch_version:
             messagebox.showerror("Error", "Patch version is required!")
             return
@@ -37,9 +51,9 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         
         db.conn.begin()
 
-        patchAlreadyExists = db.check_patch_exists(patch_prefixe, patch_version)
+        patchAlreadyExists = db.check_patch_exists(patch_prefixe, patch_version.split("-")[0])
         if patchAlreadyExists:
-            raise ValueError(f"Patch with prefix '{patch_prefixe}' and version '{patch_version}' already exists. "
+            raise ValueError(f"Patch with prefix '{patch_prefixe}' and version '{patch_version.split('-')[0]}' already exists. "
                             "You might want to update the existing patch or use the next version.")
 
         os.makedirs(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), exist_ok=True)

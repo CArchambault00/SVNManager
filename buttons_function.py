@@ -162,8 +162,8 @@ def _show_files_outside_svn_error(files_outside_svn):
     remaining = len(files_outside_svn) - len(files_to_show)
     
     error_message = (
-        "The following files are not in the SVN repository scope "
-        "and will not be added to the patch:\n\n"
+        "The following files are not in the SVN repository scope and will not be added to the patch:\n"
+        "Your current profile may not include these files.\n\n"
     )
     error_message += "\n".join(f"• {file}" for file in files_to_show)
     

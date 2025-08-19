@@ -144,6 +144,38 @@ def initialize_native_topbar(root, app_version):
             "The application will remember your selected profile even after closing.")
     )
 
+    help_menu.add_command(
+        label="Patch version",
+        command=lambda: messagebox.showinfo("Patch version", 
+            "Patch must follow the format 'Major.Minor.Patch-*'\n" \
+            "Following those patterns (Can be combined):\n" \
+            "Web changes :\n" \
+            "*-W0 -> web page, change function, logic(not visible for user)\n" \
+            "*-W1 -> add/change elements on the web page..\n" \
+            "*-W2 -> add/change business logic.. *Breaking change*\n\n" \
+            "Server/Database changes :\n" \
+            "*-S0 -> min. logical Change; New Label; System Parameter; New type report.\n" \
+            "*-S1 -> new function, new param\n" \
+            "*-S2 -> add Param; delete Param; alter table; change column size;\n" \
+            "")
+    )
+
+    help_menu.add_command(
+        label="Profile",
+        command=lambda: messagebox.showinfo("Profile", 
+            "Profiles are used to manage different projects\n\n"
+            "To create a new profile:\n"
+            "1. Click on Profile at the top left of SVNManager and select 'Manage Profiles...'\n"
+            "2. You should see your existing profiles listed and buttons to add or remove profiles.\n"
+            "3. Configure the profile settings as needed.\n"
+            "4. PATCH PREFIX other than S are meant for specific projects like ANT, DYNA etc...\n"
+            "5. The SVN Path must match the PROJECTS and the PREFIX. \n'S' is for the root of SVN Repo and other PREFIX are meant for {{SVN_Repo_root}}/Projects/Clients/{{Client_Name}}\n'A - ANT' is for AntPackaging which must have the SVN_PATH set to {{SVN_Repo_root}}/Projects/Clients/AntPackaging\n\n"
+            "To switch between profiles:\n"
+            "1. Click on Profile at the top left of SVNManager and select 'Manage Profiles...'\n"
+            "2. Choose the profile you want to switch to and click 'Set Active'.\n"
+            "3. The application will reload with the selected profile's settings.")
+    )
+
     menu_bar.add_cascade(label="Help", menu=help_menu)
     
     # Add Reset button before Exit
