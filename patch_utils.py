@@ -2,10 +2,10 @@ import hashlib
 from tkinter import messagebox
 import shutil
 import os
-from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision, get_file_revision_batch, get_file_head_revision, get_file_head_revision_batch
+from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision, get_file_revision_batch, get_file_head_revision, get_file_head_revision_batch, get_relative_path
 from db_handler import dbClass
 import time
-from config import log_error
+from config import log_error, load_config
 
 def get_md5_checksum(file_path):
     """Returns the MD5 checksum of a given file."""
@@ -63,25 +63,20 @@ def cleanup_files(patch_version_folder):
 
 def create_depend_txt(db_handler, patch_version_folder, patch_id):
     try:
-        patch_files = db_handler.get_patch_file_list(patch_id)
+        patch_files = db_handler.get_patch_file_list_new(patch_id)
         depend_content = set()  # Use a set to avoid duplicates
         
         for file_info in patch_files:
             folder_path = ""
 
-            if file_info['FOLDER_TYPE'] == '1':
-                folder_path = "$/Projects/SVN/webpage" + file_info['PATH']
-            elif file_info['FOLDER_TYPE'] == '2':
-                folder_path = "$/Projects/SVN/Database" + file_info['PATH']
+            folder_path = file_info['PATH'].replace(file_info['NAME'], "")
 
             file_name = file_info['NAME']
             current_version = file_info.get('VERSION')
             if current_version is None:
                 continue
-                
             # Get previous versions of this file from other patches
-            previous_versions = db_handler.get_folder_patch_list(folder_path)
-            
+            previous_versions = db_handler.get_folder_patch_list_new(folder_path)
             # Filter for this specific file with versions < current version
             for pv in previous_versions:
                 if (pv['NAME'] == file_name and 
@@ -188,18 +183,22 @@ def create_readme_file(patch_version_folder, patch_name, username, creation_date
         # Pre-process files to avoid multiple iterations
         webpage_files = []
         database_files = []
-        
+        svn_path = load_config().get("svn_path", "")
         for file in files:
             if isinstance(file, dict):
                 # Files from database already have their versions
                 if file["FOLDER_TYPE"] == '1':
-                    webpage_files.append(f"webpage{file['PATH']} ({file['VERSION']})")
+                    webpage_files.append(f"{file["PATH"]} ({file['VERSION']})")
                 else:
-                    database_files.append(f"Database{file['PATH']} ({file['VERSION']})")
+                    database_files.append(f"{file["PATH"]} ({file['VERSION']})")
             else:
-                # For string file paths, get the HEAD revision
                 revision = get_file_head_revision(file)
-                if file.startswith("webpage"):
+                filePathWithoutProjects = file
+
+                if get_relative_path(svn_path) != "" and filePathWithoutProjects.startswith(get_relative_path(svn_path)):
+                    filePathWithoutProjects = filePathWithoutProjects.replace(get_relative_path(svn_path), "")[1:]
+
+                if filePathWithoutProjects.startswith("webpage"):
                     webpage_files.append(f"{file} ({revision})")
                 else:
                     database_files.append(f"{file} ({revision})")
@@ -232,18 +231,30 @@ def create_main_sql_file(patch_version_folder, files, patch_name=None, version_i
         
         # Group files by schema
         schema_files = {}
-        
+
+        svn_path = load_config().get("svn_path", "")
+
         # Process and organize files by schema
         for file in files:
+            if isinstance(file, dict):
+                filePathWithoutProjects = file["PATH"]
+                filePathWithoutProjects = filePathWithoutProjects.replace(file["SVN_PATH"], "")
+            elif isinstance(file, str):
+                filePathWithoutProjects = file
+                if get_relative_path(svn_path) != "" and isinstance(filePathWithoutProjects, str) and filePathWithoutProjects.startswith(get_relative_path(svn_path)):
+                    filePathWithoutProjects = filePathWithoutProjects.replace(get_relative_path(svn_path), "")[1:]
+            
+
             if isinstance(file, dict) and file["FOLDER_TYPE"] == '2':
-                schema = file["PATH"].split("/")[1]
-                file_path = 'DB' + file["PATH"].replace("Database", "DB").replace("StoredProcedures", "SP")
+                filePathWithoutProjects = "Database" + filePathWithoutProjects
+                schema = filePathWithoutProjects.split("/")[1]
+                file_path = filePathWithoutProjects.replace("Database", "DB").replace("StoredProcedures", "SP")
                 if schema not in schema_files:
                     schema_files[schema] = []
                 schema_files[schema].append(file_path)
-            elif isinstance(file, str) and file.startswith("Database"):
-                file_path = file.replace("Database", "DB").replace("StoredProcedures", "SP")
-                schema = file.split("/")[1]
+            elif isinstance(file, str) and filePathWithoutProjects.startswith("Database"):
+                file_path = filePathWithoutProjects.replace("Database", "DB").replace("StoredProcedures", "SP")
+                schema = filePathWithoutProjects.split("/")[1]
                 if schema not in schema_files:
                     schema_files[schema] = []
                 schema_files[schema].append(file_path)
@@ -348,6 +359,8 @@ def create_patch_files_batch(files, svn_path, patch_version_folder):
     # First, categorize files
     for file in files:
         file_path_no_svn = file
+        if get_relative_path(svn_path) != "" and file_path_no_svn.startswith(get_relative_path(svn_path)):
+            file_path_no_svn = file_path_no_svn.replace(get_relative_path(svn_path), "")[1:]
         if file_path_no_svn.startswith("webpage"):
             web_files.append((
                 file_path_no_svn,
@@ -361,7 +374,6 @@ def create_patch_files_batch(files, svn_path, patch_version_folder):
                 sql_path,
                 f"{svn_path}/{file_path_no_svn}"
             ))
-
     # Create directories with error handling
     directories = set()
     for _, dest_path, _ in web_files + db_files:

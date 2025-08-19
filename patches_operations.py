@@ -10,6 +10,7 @@ from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, crea
 from tkinter import messagebox
 import datetime as date
 from dialog import display_patch_files
+import subprocess
 
 patch_info_dict = {}
 
@@ -24,7 +25,6 @@ def refresh_patches(treeview, temp, application_id, username):
     # Clear existing items
     for item in treeview.get_children():
         treeview.delete(item)
-
     patch_info_dict.clear()
 
     # Fetch patches from the database
@@ -91,25 +91,30 @@ def build_patch(patch_info):
         svn_path = config.get("svn_path")
         
         patch_id = patch_info["PATCH_ID"]
-        files = db.get_patch_file_list(patch_id)
-        
+        files = db.get_patch_file_list_new(patch_id)
+
+        wc_root = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False
+        ).stdout.strip().replace("\\", "/")
         for file in files:
             if file["FOLDER_TYPE"] == '1':
-                file_path = file["PATH"]
-                file_location = f"{svn_path}/webpage{file['PATH']}"
-                destination_folder = f"{patch_version_folder}/Web"
+                file_path = file["PATH"].replace(file["SVN_PATH"], "Web")
+                file_path = file_path.replace("webpage", "Web")
+                file_location = f"{wc_root}/{file['PATH']}"
             else:
-                file_path = file["PATH"].replace("StoredProcedures", "SP")
-                file_location = f"{svn_path}/Database{file['PATH']}"
-                destination_folder = f"{patch_version_folder}/DB"
-            
-            # Get the specific version of the file from SVN
+                file_path = file["PATH"].replace(file["SVN_PATH"], "DB")
+                file_path = file_path.replace("StoredProcedures", "SP")
+                file_path = file_path.replace("Database", "DB")
+                file_location = f"{wc_root}/{file['PATH']}"
             get_file_specific_version(
                 file_location,
                 file_path,
                 file["NAME"],
                 file["VERSION"],  # Use the version stored in the database
-                destination_folder
+                patch_version_folder
             )
         
         # Create supporting files with the correct file versions
@@ -150,12 +155,12 @@ def refresh_patch_files(treeview, patch_info):
         treeview.delete(item)
 
     patch_id = patch_info["PATCH_ID"]
-    files = db.get_patch_file_list(patch_id)
+    files = db.get_patch_file_list_new(patch_id)
     for file in files:
         if file["FOLDER_TYPE"] == '1':
-            file_path = "webpage" + file["PATH"]
+            file_path = file["PATH"]
         else:
-            file_path = 'Database' + file["PATH"]
+            file_path = file["PATH"]
         lock_by_user,lock_owner,svn_revision, lock_date = get_file_info(file_path)
         if lock_by_user:
             item = treeview.insert('', 'end', values=('locked',file["VERSION"], file_path, lock_date))
@@ -204,7 +209,15 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         
         os.makedirs(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), exist_ok=True)
         commit_files(selected_files,unlock_files)
-        
+
+        wc_root = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        ).stdout.strip().replace("\\", "/")
+
         db.conn.begin()
         db.update_patch_header(patch_id, patch_version_prefixe, patch_version_entry, patch_description)
         db.delete_patch_detail(patch_id)
@@ -214,8 +227,16 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         for file in selected_files:
             fake_path = '$/Projects/SVN/' + file
             filename = os.path.basename(file)
-            file_id = db.create_patch_detail(patch_id, fake_path, filename, get_file_head_revision(file))
-            md5checksum = get_md5_checksum(f"{svn_path}/{file}")
+            clean_path = file.replace(filename, "")
+
+            parts = file.replace("\\", "/").split("/")
+            if file.startswith('Projects/'):
+                soft_path = "/".join(parts[:4])
+            else:
+                soft_path = "/".join(parts[:1])
+            folder_id = db.get_folder_id(soft_path)
+            file_id = db.create_patch_detail(patch_id, fake_path, clean_path, filename, get_file_head_revision(file), folder_id)
+            md5checksum = get_md5_checksum(f"{wc_root}/{file}")
             db.set_md5(patch_id, file_id, md5checksum)
             
         create_patch_files_batch(selected_files, svn_path, patch_version_folder)
@@ -269,14 +290,14 @@ def view_files_from_patch(patch_info):
     db = dbClass()
     
     patch_id = patch_info["PATCH_ID"]
-    files = db.get_patch_file_list(patch_id)
+    files = db.get_patch_file_list_new(patch_id)
     file_list = []
 
     for file in files:
         if file["FOLDER_TYPE"] == '1':
-            file_path = "webpage" + file["PATH"]
+            file_path = file["PATH"]
         else:
-            file_path = 'Database' + file["PATH"]
+            file_path = file["PATH"]
         lock_by_user,lock_owner,svn_revision, lock_date = get_file_info(file_path)
         if lock_by_user:
             file_list.append(f'locked || VERSION: {file["VERSION"]} || {file_path} || LOCKDATE: {lock_date}')

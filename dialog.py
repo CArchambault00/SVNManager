@@ -51,7 +51,7 @@ def set_username(config_menu, menu_bar):
         # Update menu labels based on correct conditions
         for i in range(menu_bar.index('end') + 1):
             try:
-                if 'Profile' in menu_bar.entrycget(i, 'label'):
+                if menu_bar.entrycget(i, 'label').startswith('Profile'):
                     # Profile status depends on having an active profile
                     menu_bar.entryconfig(i, label=f"Profile {'✔️' if config.get('active_profile') else '❌'}")
                 elif 'Config' in menu_bar.entrycget(i, 'label'):

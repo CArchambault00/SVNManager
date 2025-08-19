@@ -3,7 +3,8 @@ from tkinter import ttk, messagebox, filedialog, simpledialog
 from typing import List, Optional, Callable
 from profiles import Profile, create_profile, update_profile, delete_profile, get_profile, list_profiles
 from db_handler import dbClass
-
+from svn_operations import is_svn_repo_root, get_relative_path
+import profiles
 class ProfileDialog:
     def __init__(self, parent):
         self.dialog = tk.Toplevel(parent)
@@ -39,10 +40,11 @@ class ProfileDialog:
         """Get existing patch prefixes from the database"""
         try:
             cursor = self.db.conn.cursor()
-            cursor.execute("SELECT PREFIX FROM MODULE ORDER BY PREFIX")
-            prefixes = [row[0] for row in cursor.fetchall()]
+            cursor.execute("SELECT PREFIX, APPLICATION_ID FROM MODULE WHERE APPLICATION_ID != 'CORE' AND PREFIX != 'J' ORDER BY PREFIX")
+            rows = cursor.fetchall()
+            result = [f"{row[0]} - {row[1]}" for row in rows]
             cursor.close()
-            return prefixes
+            return result
         except Exception as e:
             messagebox.showerror("Database Error", f"Failed to get patch prefixes: {str(e)}")
             return []
@@ -159,14 +161,15 @@ class ProfileDialog:
     def validate_patch_prefix(self, prefix: str) -> bool:
         """Validate patch prefix format and existence"""
         # Check format
+        prefix = prefix.split(" - ")[0].strip().upper()
         if not prefix.isalpha() or len(prefix) > 4:
             messagebox.showwarning("Invalid Format", 
                                 "Patch prefix must contain only letters and be maximum 4 characters long")
             return False
-        prefix = prefix.strip().upper()
         # If it's an existing prefix, it's valid
-        if prefix in self.existing_patch_prefixes:
-            return True
+        for item in self.existing_patch_prefixes:
+            if item.split(" - ")[0] == prefix:
+                return True
             
         # For new prefixes, ask for confirmation and get APPLICATION_ID
         if messagebox.askyesno("Confirm New Prefix", 
@@ -179,7 +182,7 @@ class ProfileDialog:
                                                      initialvalue=prefix)
                 if application_id is None:  # User cancelled
                     return False
-                    
+                application_id = application_id.strip().upper()
                 # Validate APPLICATION_ID is unique
                 try:
                     cursor = self.db.conn.cursor()
@@ -191,13 +194,11 @@ class ProfileDialog:
                         continue
                     
                     # Insert new prefix with APPLICATION_ID
-                    cursor.execute("INSERT INTO MODULE (PREFIX, APPLICATION_ID) VALUES (:1, :2)", 
-                                (prefix, application_id))
-                    self.db.conn.commit()
-                    cursor.close()
+                    cursor.execute("INSERT INTO MODULE (PREFIX, APPLICATION_ID, REPO) VALUES (:1, :2, :3)", 
+                                (prefix, application_id, "SVN"))
                     
                     # Update the existing prefixes list and combobox
-                    self.existing_patch_prefixes.append(prefix)
+                    self.existing_patch_prefixes.append(prefix + " - " + application_id)
                     self.existing_patch_prefixes.sort()
                     self.patch_prefix_combo['values'] = self.existing_patch_prefixes + ["Custom..."]
                     
@@ -208,6 +209,82 @@ class ProfileDialog:
                         cursor.close()
                     return False
         return False
+    
+    def create_folder(self, patch_prefix: str, svn_path: str):
+        """Create the necessary folder structure for the patch prefix"""
+        if not svn_path:
+            messagebox.showerror("Error", "SVN Path is not set")
+            return
+            
+        # Normalize SVN path
+        svn_path = svn_path.replace("\\", "/").rstrip("/")
+        
+        # Check if we're at the root of the SVN repo
+        is_root = is_svn_repo_root(svn_path)
+        
+        if is_root and patch_prefix != 'S':
+            messagebox.showerror("Error", "Only prefix 'S' is allowed at the root of the SVN repository.")
+            return
+            
+        if not is_root and patch_prefix == 'S':
+            messagebox.showerror("Error", "Prefix 'S' can only be used at the root of the SVN repository.")
+            return
+        cursor = None
+        try:
+            cursor = self.db.conn.cursor()
+
+            # Build path mappings (folder_type: (path_suffix, description_prefix))
+            folder_map = {
+                1: ("webpage", "Web for "),
+                2: ("Database", "Database for "),
+                4: ("CGI", "CGI for "),
+                3: ("DLL", "DLL for "),
+            }
+
+            base_relative = get_relative_path(svn_path)
+            base_fake_path = "$/Projects/SVN/" + base_relative
+
+            # Get current max FOLDER_ID once
+            cursor.execute("SELECT NVL(MAX(FOLDER_ID), 0) FROM FOLDER")
+            next_folder_id = cursor.fetchone()[0] + 1
+
+            for folder_type, (suffix, desc_prefix) in folder_map.items():
+                fake_path = f"{base_fake_path}/{suffix}"
+                relative_path = f"{base_relative}/{suffix}"
+                
+                # Check if path already exists
+                cursor.execute("SELECT COUNT(*) FROM FOLDER WHERE PATH = :1", (fake_path,))
+                exists = cursor.fetchone()[0]
+                
+                if not exists:
+                    cursor.execute("""
+                        INSERT INTO FOLDER 
+                        (PATH, DESCRIPTION, FOLDER_TYPE, SOFT_PATH, DEFAULT_PREFIX, REPO_TYPE, SVN_PATH, FOLDER_ID)
+                        VALUES (:1, :2, :3, :4, :5, :6, :7, :8)
+                    """, (
+                        fake_path,
+                        desc_prefix + patch_prefix,
+                        folder_type,
+                        relative_path,
+                        patch_prefix,
+                        "SVN",
+                        relative_path,
+                        next_folder_id
+                    ))
+                    next_folder_id += 1  # Increment only when inserting
+
+            self.db.conn.commit()
+            cursor.close()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to create folder structure: {str(e)}")
+            if cursor:
+                cursor.close()
+                self.db.conn.rollback()
+                messagebox.showerror("Error", f"Failed to create folder structure: {str(e)}")
+                if cursor:
+                    cursor.close()
+        return
+
 
     def get_current_patch_prefix(self) -> str:
         """Get the current patch prefix from either combobox or custom entry"""
@@ -217,8 +294,14 @@ class ProfileDialog:
 
     def set_patch_prefix(self, prefix: str):
         """Set the patch prefix in the UI"""
-        if prefix in self.existing_patch_prefixes:
-            self.patch_prefix_combo.set(prefix)
+        # Try to match prefix with existing_patch_prefixes (which are like 'D - DYNA')
+        matched = None
+        for item in self.existing_patch_prefixes:
+            if item.split(" - ")[0] == prefix:
+                matched = item
+                break
+        if matched:
+            self.patch_prefix_combo.set(matched)
             self.custom_patch_entry.pack_forget()
             self.custom_patch_var.set("")
         else:
@@ -301,14 +384,40 @@ class ProfileDialog:
         patch_prefix = self.get_current_patch_prefix()
         current_patches = self.current_patches_var.get().strip()
         dsn_name = self.dsn_name_var.get().strip()
-        
+
+        patch_prefix = patch_prefix.split(" - ")[0].strip().upper()
+         
         if not all([name, svn_path, patch_prefix, current_patches, dsn_name]):
             messagebox.showwarning("Warning", "All fields are required")
             return
             
+        # Normalize and check if we're at the root of the SVN repo (no "Projects" in path, and no subfolders)
+        is_root = "Projects" not in svn_path and svn_path.rstrip("/\\").endswith(("jtdev", "jtdev/"))  # adjust if needed
+
+        # S prefix must be used only at the root
+        if not is_root and patch_prefix == 'S':
+            messagebox.showerror("Error", "Prefix 'S' is only allowed at the root of the SVN repository.")
+            return
+
+        # Other prefixes (not 'S') must be used only inside Projects
+        if is_root and patch_prefix != 'S':
+            messagebox.showerror("Error", "Only prefix 'S' is allowed at the root of the SVN repository.")
+            return
+        
+        if patch_prefix != 'S':
+            # Ensure svn_path ends with 'Projects/Clients/{Client_name}' (no trailing slash, no subfolders)
+            parts = svn_path.replace("\\", "/").split("/")
+            if len(parts) < 3 or parts[-3] != "Projects" or parts[-2] != "Clients" or not parts[-1]:
+                messagebox.showerror(
+                    "Error",
+                    f"SVN_Path must be inside '{{SVN_Root_Folder}}/Projects/Clients/{{Client_name}}' (no subfolders) !\n for patch prefix '{patch_prefix}'."
+                )
+                return
+            
         if not self.validate_patch_prefix(patch_prefix):
             return
-            
+        self.create_folder(patch_prefix, svn_path)
+
         try:
             current_state = str(self.name_entry.cget("state"))
             is_new_profile = current_state != "disabled"

@@ -17,6 +17,20 @@ class ContextMenuManager:
     def __init__(self):
         self.menus = {}
         self.switch_callback = None
+        self.prefix_combobox = None  # Store reference to the prefix combobox
+
+    def set_prefix_combobox(self, combobox):
+        """Set reference to the prefix combobox for easier access."""
+        self.prefix_combobox = combobox
+
+    def get_current_prefix(self):
+        """Get the current prefix from the stored combobox reference."""
+        if self.prefix_combobox and hasattr(self.prefix_combobox, 'get'):
+            try:
+                return self.prefix_combobox.get()
+            except tk.TclError:
+                pass
+        return None
 
     def create_files_menu(self, listbox, menu_name: str = "patch_files"):
         """Create context menu for files treeview."""
@@ -199,13 +213,18 @@ class ContextMenuManager:
             print("Warning: No switch_callback set for modify_patch")
             log_error("Warning: No switch_callback set for modify_patch")
             return
-            
+        
+        config = load_config()
+
         selected = treeview.selection()
         if selected:
             item_values = treeview.item(selected[0], "values")
             # Get full patch info before calling the switch callback
             patch_name = item_values[0]
             full_patch_info = get_full_patch_info(patch_name)
+            if full_patch_info['NAME'][0] != config.get("patch_prefix", [""])[0]:
+                messagebox.showerror("Error", f"You cannot modify this patch with you current profile, change your profile to have\n{full_patch_info['NAME'][0]} as the patch prefix.")
+                return
             if full_patch_info:
                 self.switch_callback(full_patch_info)
             else:
@@ -250,13 +269,28 @@ class ContextMenuManager:
 
     def _refresh_patches(self, treeview):
         """Refresh patches list."""
-        # Get current prefix from combobox in parent window
-        prefix_combo = self._find_prefix_combobox(treeview)
-        if prefix_combo:
-            prefix = prefix_combo.get()
+        # Try to get prefix from stored reference first
+        prefix = self.get_current_prefix()
+        
+        if not prefix:
+            # Fallback: search for prefix combobox in root window
+            root_widget = treeview.winfo_toplevel()
+            prefix_combo = self._find_prefix_combobox(root_widget)
+            if prefix_combo:
+                try:
+                    prefix = prefix_combo.get()
+                except Exception as e:
+                    log_error(f"Error getting prefix from combo: {e}")
+        
+        if not prefix:
+            # Fallback to default from config
             from config import load_config
             config = load_config()
-            refresh_patches(treeview, False, prefix, config.get("username"))
+            prefix = config.get("patch_prefix", ["S"])[0] if config.get("patch_prefix") else "S"
+        
+        from config import load_config
+        config = load_config()
+        refresh_patches(treeview, False, prefix, config.get("username"))
 
     def refresh_available_locked_files(self, locked_files_treeview, main_treeview):
         """Refresh the list of locked files."""
@@ -300,10 +334,33 @@ class ContextMenuManager:
 
     def _find_prefix_combobox(self, widget):
         """Find the prefix combobox in the window hierarchy."""
-        root = widget.winfo_toplevel()
-        for child in root.winfo_children():
-            if hasattr(child, "prefix_combobox"):
-                return child.prefix_combobox
+        from tkinter import ttk
+        
+        # Look for ttk.Combobox with width=3 (prefix combobox) or containing prefix values
+        if isinstance(widget, ttk.Combobox):
+            # Check if it's a small combobox (likely the prefix one)
+            try:
+                widget_width = widget.cget('width')
+                current_value = widget.get() if hasattr(widget, 'get') else ""
+                
+                # Check if it's the prefix combobox by width or content
+                if (widget_width == 3 or 
+                    (len(current_value) <= 3 and current_value.isalpha() and current_value.isupper())):
+                    return widget
+            except tk.TclError:
+                # Widget might not be fully initialized yet
+                pass
+        
+        # Recursively search through all children
+        try:
+            for child in widget.winfo_children():
+                result = self._find_prefix_combobox(child)
+                if result:
+                    return result
+        except tk.TclError:
+            # Widget might not exist anymore
+            pass
+        
         return None
 
     def _edit_patch_description(self, treeview):

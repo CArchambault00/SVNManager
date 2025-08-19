@@ -312,12 +312,12 @@ def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_
     prefixes = db.get_prefix_list()
 
     patch_version_prefixe = ttk.Combobox(patch_version_frame, values=prefixes, width=3)
-    patch_version_prefixe.set("S")  # default value
+    patch_version_prefixe.set(config.get("patch_prefix", "S"))  # default value
     patch_version_prefixe.pack(side="left", padx=5)
     username = config.get("username")
     # On patch version change, refresh the patches
     patch_version_prefixe.bind("<<ComboboxSelected>>", lambda event: refresh_patches(patches_listbox, False, patch_version_prefixe.get(), username))
-    
+
     # Return widget references for state management
     return {
         "patch_version_prefixe": patch_version_prefixe

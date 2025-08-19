@@ -144,17 +144,17 @@ class dbClass:
         sql = "SELECT FILE_ID, PATH, NAME, DELETED_YN FROM FILES WHERE PATH = :folder ORDER BY NAME"
         return self.execute_query(sql, {'folder': folder})
 
-    def add_file(self, folder: str, filename: str) -> int:
-        sql = "SELECT FILE_ID FROM FILES WHERE PATH = :folder AND NAME = :filename"
-        result = self.execute_query(sql, {'folder': folder, 'filename': filename})
+    def add_file(self, folder: str, filename: str, folder_id: int, clean_path: str) -> int:
+        sql = "SELECT FILE_ID FROM FILES WHERE (PATH = :folder OR CLEAN_PATH = :clean_path) AND NAME = :filename"
+        result = self.execute_query(sql, {'folder': folder, 'clean_path': clean_path, 'filename': filename})
         if result:
             return result[0]['FILE_ID']
         else:
             sql = "SELECT MAX(FILE_ID) AS MAX_ID FROM FILES"
             result = self.execute_query(sql)
             file_id = (result[0]['MAX_ID'] or 0) + 1
-            sql = "INSERT INTO FILES (FILE_ID, PATH, NAME, DELETED_YN) VALUES (:file_id, :folder, :filename, 'N')"
-            self.execute_non_query(sql, {'file_id': file_id, 'folder': folder, 'filename': filename})
+            sql = "INSERT INTO FILES (FILE_ID, PATH, NAME, DELETED_YN, FOLDER_ID, CLEAN_PATH) VALUES (:file_id, :folder, :filename, 'N', :folder_id, :clean_path)"
+            self.execute_non_query(sql, {'file_id': file_id, 'folder': folder, 'filename': filename, 'folder_id': folder_id, 'clean_path': clean_path})
             return file_id
 
     def get_file_patch_list(self, folder: str, name: str):
@@ -178,6 +178,19 @@ class dbClass:
         WHERE F.FILE_ID = D.FILE_ID
         AND D.PATCH_ID = H.PATCH_ID
         AND F.PATH = :folder
+        AND H.TEMP_YN = 'N'
+        AND H.DELETED_YN = 'N'
+        ORDER BY D.VERSION DESC
+        """
+        return self.execute_query(sql, {'folder': folder})
+    
+    def get_folder_patch_list_new(self, folder: str):
+        sql = """
+        SELECT F.FILE_ID, F.PATH, F.NAME, F.DELETED_YN, H.NAME AS PATCH_NAME, D.VERSION, D.MD5_CHECKSUM
+        FROM FILES F, PATCH_DETAIL D, PATCH_HEADER H
+        WHERE F.FILE_ID = D.FILE_ID
+        AND D.PATCH_ID = H.PATCH_ID
+        AND F.CLEAN_PATH = :folder
         AND H.TEMP_YN = 'N'
         AND H.DELETED_YN = 'N'
         ORDER BY D.VERSION DESC
@@ -225,12 +238,20 @@ class dbClass:
         sql = "UPDATE PATCH_HEADER SET COMMENTS = :comments WHERE PATCH_ID = :patch_id"
         self.execute_non_query(sql, {'comments': comments, 'patch_id': patch_id})
 
-    def create_patch_detail(self, patch_id: int, folder: str, name: str, version: int):
-        file_id = self.add_file(folder, name)
+    def create_patch_detail(self, patch_id: int, folder: str, clean_path:str, name: str, version: int, folder_id: int):
+        file_id = self.add_file(folder, name, folder_id, clean_path)
         sql = "INSERT INTO PATCH_DETAIL (PATCH_ID, FILE_ID, VERSION) VALUES (:patch_id, :file_id, :version)"
         self.execute_non_query(sql, {'patch_id': patch_id, 'file_id': file_id, 'version': version})
         return file_id
     
+    def get_folder_id(self, folder: str) -> int:
+        sql = "SELECT FOLDER_ID FROM FOLDER WHERE SOFT_PATH = :folder"
+        result = self.execute_query(sql, {'folder': folder})
+        if result:
+            return result[0]['FOLDER_ID']
+        else:
+            raise ValueError(f"Folder ID for '{folder}' not found.")
+
     def get_patch_list(self, temp_yn: bool, application_id: str):
         sql = """
         SELECT H.PATCH_ID, H.NAME, H.COMMENTS, DECODE(D.PATCH_ID, NULL, 0, COUNT(*)) AS PATCH_SIZE, H.USER_ID, H.CREATION_DATE,
@@ -347,6 +368,31 @@ class dbClass:
         AND SUBSTR(F.PATH, 1, LENGTH(R.PATH)) = R.PATH
         ORDER BY R.FOLDER_TYPE, F.PATH
         """
+
+        # SELECT F.PATH AS PATH, F.NAME, D.VERSION, D.PATCH_ID
+        # FROM PATCH_DETAIL D, FILES F
+        # WHERE D.FILE_ID = F.FILE_ID
+        # AND D.PATCH_ID = :patch_id
+        # ORDER BY F.PATH
+
+        return self.execute_query(sql, {'patch_id': patch_id})
+    
+    def get_patch_file_list_new(self, patch_id: int):
+        sql = """
+        SELECT R.FOLDER_TYPE,
+            CONCAT(F.CLEAN_PATH, F.NAME) AS PATH,
+            R.SVN_PATH as SVN_PATH,
+            F.NAME,
+            D.VERSION,
+            D.PATCH_ID
+        FROM PATCH_DETAIL D
+        JOIN FILES F ON D.FILE_ID = F.FILE_ID
+        JOIN FOLDER R 
+        ON (F.FOLDER_ID = R.FOLDER_ID 
+            OR SUBSTR(F.PATH, 1, LENGTH(R.PATH)) = R.PATH)
+        WHERE D.PATCH_ID = :patch_id
+        ORDER BY R.FOLDER_TYPE, F.PATH
+        """
         return self.execute_query(sql, {'patch_id': patch_id})
 
     def get_patch_doc_comment(self, patch_id: int):
@@ -381,6 +427,16 @@ class dbClass:
         sql = "SELECT PREFIX FROM MODULE"
         list = self.execute_query(sql)
         return [item['PREFIX'] for item in list]
+    
+    def check_patch_exists(self, patch_prefix: str, patch_version: str) -> bool:
+        sql = """
+        SELECT COUNT(*) AS COUNT
+        FROM PATCH_HEADER
+        WHERE NAME = :patch_name
+        AND DELETED_YN = 'N'
+        """
+        result = self.execute_query(sql, {'patch_name': f"{patch_prefix}{patch_version}"})
+        return result[0]['COUNT'] > 0
 
     def __del__(self):
         self.close()

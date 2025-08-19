@@ -126,9 +126,10 @@ def save_current_state(root_widget) -> None:
                         selected_patch = file_listbox.item(selected_items[0], "values")[0]
                     
                     # Find the patch prefix combobox
-                    patch_prefixe = find_patch_prefix_combobox(widget)
+                    patch_prefixe = find_patch_prefix_combobox(root_widget)
+
                     selected_prefix = patch_prefixe.get() if patch_prefixe else "S"
-                    
+
                     state_manager.save_state(current_menu, 
                                            selected_patch=selected_patch,
                                            selected_prefix=selected_prefix)
@@ -186,6 +187,7 @@ def switch_to_lock_unlock_menu(root_widget=None) -> None:
     
     # Restore state if available
     lock_unlock_state = state_manager.get_state("lock_unlock")
+    
     if lock_unlock_state.get("listbox_items"):
         # Repopulate the listbox with saved items
         for item in lock_unlock_state["listbox_items"]:
@@ -394,10 +396,18 @@ def switch_to_patches_menu(root_widget=None) -> None:
     buttons_frame = create_button_frame_patches(bottom_right_frame, patches_listbox, switch_to_modify_patch_menu)
     username = config.get("username")
     
+    # Set the prefix combobox reference in context menu manager
+    if "patch_version_prefixe" in buttons_frame:
+        context_menu_manager.set_prefix_combobox(buttons_frame["patch_version_prefixe"])
+    
     # Restore state if available
     patches_state = state_manager.get_state("patches")
-    selected_prefix = patches_state.get("selected_prefix", "S")
     
+    selected_prefix = patches_state.get("selected_prefix", "")
+    if selected_prefix == "":
+        selected_prefix = config.get("patch_prefix", "S")[0]
+    if not selected_prefix:
+        selected_prefix = "S"
     if "patch_version_prefixe" in buttons_frame:
         buttons_frame["patch_version_prefixe"].set(selected_prefix)
     
@@ -626,7 +636,7 @@ def find_listbox_or_treeview(parent):
 def find_patch_prefix_combobox(parent):
     """Find the patch prefix combobox in the given parent widget"""
     from tkinter import ttk
-    
+
     if isinstance(parent, ttk.Combobox) and parent.winfo_width() < 50:  # Small combobox is likely the prefix
         return parent
     

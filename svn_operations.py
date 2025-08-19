@@ -33,6 +33,12 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True, batch_size=50):
 
         locked_by_others = []
         must_update_files = []
+        wc_root = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False
+        ).stdout.strip().replace("\\", "/")
 
         # Process files in batches
         for i in range(0, len(selected_files), batch_size):
@@ -41,7 +47,7 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True, batch_size=50):
             
             result = subprocess.run(
                 args,
-                cwd=svn_path,
+                cwd=wc_root,
                 capture_output=True,
                 text=True,
                 shell=False,
@@ -91,15 +97,22 @@ def refresh_locked_files(files_listbox):
     config = load_config()
     svn_path = config.get("svn_path", "").replace("\\", "/")
     username = config.get("username")
-
+    
     if not os.path.isdir(svn_path):
         messagebox.showwarning("Warning", "Invalid SVN path!")
         return
 
     try:
+        wc_root = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False
+        ).stdout.strip().replace("\\", "/")
+
         result = subprocess.run(
             ["svn", "status", "--xml", "--verbose"],
-            cwd=svn_path,
+            cwd=wc_root,
             capture_output=True,
             text=True,
             shell=False,
@@ -126,7 +139,16 @@ def refresh_locked_files(files_listbox):
             # Check wc-status and repos-status for lock
             for status_tag in ["wc-status", "repos-status"]:
                 lock = entry.find(f"{status_tag}/lock")
-                if lock is not None and lock.findtext("owner") == username:
+                relative_path = get_relative_path(svn_path).replace("\\", "/") if lock is not None else None
+                owner = lock.findtext("owner") if lock is not None else None
+                if (
+                    lock is not None
+                    and owner == username
+                    and (
+                        (relative_path and relative_path in path)
+                        or (not relative_path and not path.startswith("Projects"))
+                    )
+                ):
                     created_utc = lock.findtext("created", "")
                     if created_utc:
                         dt_utc = datetime.strptime(created_utc.split(".")[0], "%Y-%m-%dT%H:%M:%S")
@@ -167,10 +189,17 @@ def commit_files_batch(selected_files, unlock_files, batch_size=50):
         base_args.append("--no-unlock")
     
     try:
+        wc_root = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False
+        ).stdout.strip().replace("\\", "/")
+
         for i in range(0, len(selected_files), batch_size):
             batch = selected_files[i:i + batch_size]
             args = base_args + batch
-            result = subprocess.run(args, cwd=svn_path, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+            result = subprocess.run(args, cwd=wc_root, capture_output=True, text=True, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode != 0:
                 raise Exception(result.stderr)
         
@@ -196,6 +225,14 @@ def get_file_info_batch(files, batch_size=50):
     svn_path = config.get("svn_path")
     results = {}
 
+    wc_root = subprocess.run(
+        ["svn", "info", "--show-item", "wc-root", svn_path],
+        capture_output=True,
+        text=True,
+        shell=False,
+        creationflags=subprocess.CREATE_NO_WINDOW
+    ).stdout.strip().replace("\\", "/")
+
     # Process files in batches
     for i in range(0, len(files), batch_size):
         batch = files[i:i + batch_size]
@@ -203,7 +240,7 @@ def get_file_info_batch(files, batch_size=50):
         
         # First check which files exist in SVN
         for file in batch:
-            file_path = os.path.join(svn_path, file)
+            file_path = os.path.join(wc_root, file)
             if os.path.exists(file_path):
                 valid_files.append(file)
             else:
@@ -218,7 +255,7 @@ def get_file_info_batch(files, batch_size=50):
         for file in valid_files:
             try:
                 args = ["svn", "info", "--xml", file]
-                result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+                result = subprocess.run(args, capture_output=True, text=True, cwd=wc_root, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
                 
                 if result.returncode == 0:
                     root = ET.fromstring(result.stdout)
@@ -304,12 +341,17 @@ def get_file_revision_batch(files, batch_size=50):
         
         if not valid_files:
             continue
-            
+        wc_root = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False
+        ).stdout.strip().replace("\\", "/")    
         # Process one file at a time for working copy paths
         for file in valid_files:
             try:
                 args = ["svn", "info", "--show-item", "revision", file]
-                result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+                result = subprocess.run(args, capture_output=True, text=True, cwd=wc_root, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
                 
                 if result.returncode == 0:
                     revision = result.stdout.strip()
@@ -344,9 +386,9 @@ def get_file_specific_version(file_path, file_folderStruture, file_name, revisio
     """
     config = load_config()
     destination_folder = file_folderStruture.replace(file_name, "")
-    destination_folder = destination + destination_folder
+    destination_folder = destination + "/" + destination_folder
     if not os.path.isdir(destination_folder):
-        os.makedirs(destination_folder, exist_ok=True)
+        os.makedirs(destination_folder, exist_ok=True)  
     try:
         # Use svn export with specific revision
         args = ["svn", "export", "-r", str(revision), "--force", file_path, os.path.join(destination_folder, file_name)]
@@ -364,11 +406,17 @@ def revert_files(selected_files):
     svn_path = config.get("svn_path")
 
     try:
+        wc_root = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False
+        ).stdout.strip().replace("\\", "/")
         for file in selected_files:
             # Run the SVN revert command for each file
             try:
                 args = ["svn", "revert", file]
-                subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+                subprocess.run(args, capture_output=True, text=True, cwd=wc_root, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
             except Exception as e:
                 raise Exception("Failed to run SVN revert command", e)
     except Exception as e:
@@ -379,7 +427,15 @@ def copy_InstallConfig(destination):
     config = load_config()
     svn_path = config.get("svn_path")
     try:
-        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Misc Tools/InstallConfig/InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+        result = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        wc_root = result.stdout.strip().replace("\\", "/")
+        subprocess.run(["svn", "export", "--force", f"{wc_root}/Tools/Misc Tools/InstallConfig/InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
     except subprocess.CalledProcessError as e:
         raise Exception(f"Failed to copy InstallConfig.exe from SVN: {e}")
 
@@ -388,7 +444,15 @@ def copy_RunScript(destination):
     config = load_config()
     svn_path = config.get("svn_path")
     try:
-        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Misc Tools/InstallConfig/RunScript.bat", destination], check=True,  stdout=subprocess.DEVNULL, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+        result = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        wc_root = result.stdout.strip().replace("\\", "/")
+        subprocess.run(["svn", "export", "--force", f"{wc_root}/Tools/Misc Tools/InstallConfig/RunScript.bat", destination], check=True,  stdout=subprocess.DEVNULL, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception as e:
         raise Exception(f"Failed to copy RunScript.exe from SVN: {e}")
 
@@ -396,8 +460,16 @@ def copy_UnderTestInstallConfig(destination):
     # Copy InstallConfig.exe from the remote SVN Tools/Misc Tools/InstallConfig folder to the local destination
     config = load_config()
     svn_path = config.get("svn_path")
-    try:
-        subprocess.run(["svn", "export", "--force", f"{svn_path}/Tools/Test/UNDERTEST_InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
+    try:  
+        result = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        wc_root = result.stdout.strip().replace("\\", "/")
+        subprocess.run(["svn", "export", "--force", f"{wc_root}/Tools/Test/UNDERTEST_InstallConfig.exe", destination], check=True,  stdout=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
     except Exception as e:
         raise Exception(f"Failed to copy UNDERTEST_InstallConfig.exe: {e}")
 
@@ -409,6 +481,14 @@ def get_file_head_revision_batch(files, batch_size=50):
     config = load_config()
     svn_path = config.get("svn_path")
     results = {}
+
+    wc_root = subprocess.run(
+        ["svn", "info", "--show-item", "wc-root", svn_path],
+        capture_output=True,
+        text=True,
+        shell=False,
+        creationflags=subprocess.CREATE_NO_WINDOW
+    ).stdout.strip().replace("\\", "/")
     
     for i in range(0, len(files), batch_size):
         batch = files[i:i + batch_size]
@@ -416,7 +496,7 @@ def get_file_head_revision_batch(files, batch_size=50):
         
         # First check which files exist in SVN
         for file in batch:
-            file_path = os.path.join(svn_path, file)
+            file_path = os.path.join(wc_root, file)
             if os.path.exists(file_path):
                 valid_files.append(file)
             else:
@@ -431,7 +511,7 @@ def get_file_head_revision_batch(files, batch_size=50):
         for file in valid_files:
             try:
                 args = ["svn", "info", "--show-item", "last-changed-revision", file]
-                result = subprocess.run(args, capture_output=True, text=True, cwd=svn_path, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
+                result = subprocess.run(args, capture_output=True, text=True, cwd=wc_root, shell=False, creationflags=subprocess.CREATE_NO_WINDOW)
                 
                 if result.returncode == 0:
                     revision = result.stdout.strip()
@@ -464,7 +544,16 @@ def view_file_native_diff(file_path):
     try:
         config = load_config()
         svn_path = config.get("svn_path")
-        full_path = os.path.join(svn_path, file_path)
+
+        wc_root = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        ).stdout.strip().replace("\\", "/")
+
+        full_path = os.path.join(wc_root, file_path)
         
         # Method 1: Try TortoiseSVN first (best visual diff on Windows)
         try:
@@ -489,7 +578,7 @@ def view_file_native_diff(file_path):
         try:
             result = subprocess.run(
                 ["svn", "diff", file_path],
-                cwd=svn_path,
+                cwd=wc_root,
                 shell=False
             )
             if result.returncode == 0:
@@ -499,10 +588,11 @@ def view_file_native_diff(file_path):
             log_error(f"SVN diff error: {e}")
             
         # Method 3: If previous methods failed, get the diff content and display in a window
+
         try:
             result = subprocess.run(
                 ["svn", "diff", file_path],
-                cwd=svn_path,
+                cwd=wc_root,
                 capture_output=True,
                 text=True,
                 shell=False,
@@ -596,9 +686,16 @@ def get_all_locked_files():
         return []
 
     try:
+        wc_root = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False
+        ).stdout.strip().replace("\\", "/")
+
         result = subprocess.run(
             ["svn", "status", "--xml", "--verbose"],
-            cwd=svn_path,
+            cwd=wc_root,
             capture_output=True,
             text=True,
             shell=False,
@@ -625,7 +722,16 @@ def get_all_locked_files():
             # Check wc-status and repos-status for lock
             for status_tag in ["wc-status", "repos-status"]:
                 lock = entry.find(f"{status_tag}/lock")
-                if lock is not None and lock.findtext("owner") == username:
+                relative_path = get_relative_path(svn_path).replace("\\", "/") if lock is not None else None
+                owner = lock.findtext("owner") if lock is not None else None
+                if (
+                    lock is not None
+                    and owner == username
+                    and (
+                        (relative_path and relative_path in path)
+                        or (not relative_path and not path.startswith("Projects"))
+                    )
+                ):
                     created_utc = lock.findtext("created", "")
                     if created_utc:
                         dt_utc = datetime.strptime(created_utc.split(".")[0], "%Y-%m-%dT%H:%M:%S")
@@ -645,3 +751,48 @@ def get_all_locked_files():
     except Exception as e:
         messagebox.showerror("Error", f"Failed to get locked files:\n{e}")
         return []
+    
+def is_svn_repo_root(path):
+    try:
+        # Run `svn info` in the given path
+        result = subprocess.run(
+            ["svn", "info", path],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        info = result.stdout
+        
+        # Check for "Relative URL: ^/" which indicates root
+        for line in info.splitlines():
+            if line.startswith("Relative URL:"):
+                relative_url = line.split(":", 1)[1].strip()
+                return relative_url == "^/"
+        return False
+    
+    except subprocess.CalledProcessError:
+        return False  # Not an SVN working copy
+    
+def get_relative_path(absolute_path):
+    """
+    Get the relative path from the SVN working copy root to the given absolute path.
+    Uses 'svn info' to determine the working copy root.
+    """
+
+    try:
+        result = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", absolute_path],
+            capture_output=True,
+            text=True,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        wc_root = result.stdout.strip().replace("\\", "/")
+        abs_path_norm = absolute_path.replace("\\", "/")
+        if not abs_path_norm.startswith(wc_root):
+            raise ValueError(f"Path '{absolute_path}' is not under SVN working copy root '{wc_root}'")
+        relative_path = abs_path_norm[len(wc_root):].lstrip("/")
+        return relative_path
+    except Exception as e:
+        raise Exception(f"Failed to get relative path for '{absolute_path}': {e}")

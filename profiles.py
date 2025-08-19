@@ -51,6 +51,10 @@ def create_profile(name: str, svn_path: str, patch_prefix: List[str],
         raise ValueError(f"Profile '{name}' already exists")
     
     profile = Profile(name, svn_path, patch_prefix, current_patches, dsn_name)
+    # Look if any profile has the same patch_prefix
+    for existing_profile in profiles.values():
+        if existing_profile.patch_prefix[0] == patch_prefix[0]:
+            raise ValueError(f"Patch prefix '{patch_prefix[0]}' already exists in profile '{existing_profile.name}'")
     profiles[name] = profile
     save_profiles(profiles)
     return profile
@@ -80,9 +84,15 @@ def update_profile(name: str, svn_path: Optional[str] = None,
     return profile
 
 def delete_profile(name: str) -> None:
+    from config import load_config
     profiles = load_profiles()
+    config = load_config()
     if name not in profiles:
         raise ValueError(f"Profile '{name}' does not exist")
+    if profiles[name].name == config.get("active_profile"):
+        raise ValueError(f"Cannot delete active profile '{name}'")
+    if len(profiles) <= 1:
+        raise ValueError("Cannot delete the last profile")
     
     del profiles[name]
     save_profiles(profiles)

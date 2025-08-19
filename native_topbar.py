@@ -28,7 +28,7 @@ class MenuManager:
         # Find and update menu items
         for i in range(self.menu_bar.index('end') + 1):
             try:
-                if 'Profile' in self.menu_bar.entrycget(i, 'label'):
+                if self.menu_bar.entrycget(i, 'label').startswith('Profile'):
                     # Profile status depends on having an active profile
                     self.menu_bar.entryconfig(i, label=f"Profile {'✔️' if active_profile else '❌'}")
                 elif 'Config' in self.menu_bar.entrycget(i, 'label'):
@@ -36,8 +36,27 @@ class MenuManager:
                     self.menu_bar.entryconfig(i, label=f"Config {'✔️' if username else '❌'}")
             except tk.TclError:
                 continue
+        
+        # Also update the active profile display
+        self.update_active_profile_display(active_profile)
+    
+    def update_active_profile_display(self, active_profile):
+        """Update the active profile display in the menu bar"""
+        # Find the active profile display menu item
+        for i in range(self.menu_bar.index('end') + 1):
+            try:
+                label = self.menu_bar.entrycget(i, 'label')
+                if label.startswith('Active Profile:') or label == 'No Active Profile':
+                    # Update the active profile display
+                    if active_profile:
+                        self.menu_bar.entryconfig(i, label=f"Active Profile: {active_profile}")
+                    else:
+                        self.menu_bar.entryconfig(i, label="No Active Profile")
+                    break
+            except tk.TclError:
+                continue
 
-def update_profile_menu(profile_menu, active_profile):
+def update_profile_menu(profile_menu, active_profile, menu_bar):
     """Update the profile menu to show active profile"""
     # Clear existing items after "Manage Profiles..."
     last_index = profile_menu.index(tk.END)
@@ -47,12 +66,14 @@ def update_profile_menu(profile_menu, active_profile):
     if active_profile:
         profile_menu.add_separator()
         profile_menu.add_command(label=f"Active: {active_profile}", state="disabled")
+        
 
 def select_profile(config_menu, menu_bar, profile_menu, menu_manager):
     """Handle profile selection"""
     profile_name = show_profile_dialog(menu_bar.master)
     if profile_name:
         config = load_config()
+        old_profile = config.get("active_profile")
         config["active_profile"] = profile_name
         save_config(config)
         
@@ -61,7 +82,14 @@ def select_profile(config_menu, menu_bar, profile_menu, menu_manager):
         menu_manager.update_labels(config_menu, unset_var)
         
         # Update profile menu
-        update_profile_menu(profile_menu, profile_name)
+        update_profile_menu(profile_menu, profile_name, menu_bar)
+        
+        # Update active profile display
+        menu_manager.update_active_profile_display(profile_name)
+        
+        # Reset all menus if profile actually changed
+        if old_profile != profile_name:
+            reset_all_menus(menu_bar.master)
 
 def initialize_native_topbar(root, app_version):
     # Create the menu bar
@@ -83,7 +111,7 @@ def initialize_native_topbar(root, app_version):
     )
     
     # Show active profile if exists
-    update_profile_menu(profile_menu, active_profile)
+    update_profile_menu(profile_menu, active_profile, menu_bar)
 
     # Add Config menu
     menu_bar.add_cascade(
@@ -126,6 +154,13 @@ def initialize_native_topbar(root, app_version):
     
     menu_bar.add_cascade(label="Exit", command=root.quit)
     
+    # Add active profile display after Exit
+    if active_profile:
+        menu_bar.add_separator()
+        menu_bar.add_command(label=f"Active Profile: {active_profile}", state="disabled")
+    else:
+        menu_bar.add_command(label="No Active Profile", state="disabled")
+
     root.config(menu=menu_bar)
     
     # Check if username and profile are set
@@ -169,3 +204,30 @@ def reset_current_menu(root):
             modify_patch_state["original_patch_details"] = original_details
             # Rebuild menu with original state
             switch_to_modify_patch_menu(original_details, root)
+    else:
+        # Default to lock/unlock menu if no current menu or unknown menu
+        switch_to_lock_unlock_menu(root)
+
+
+def reset_all_menus(root):
+    """Reset all menu states and return to the default menu when profile changes"""
+    from state_manager import state_manager
+    from app import switch_to_lock_unlock_menu
+    
+    if state_manager.is_menu_loading():
+        # Schedule reset attempt after a short delay if menu is loading
+        root.after(100, lambda: reset_all_menus(root))
+        return
+    
+    # Set a flag to prevent state saving during reset
+    old_current_menu = state_manager.current_menu
+    state_manager.current_menu = None  # Prevent save_current_state from working
+    
+    # Clear all menu states
+    state_manager.clear_state()  # This clears all menu states
+    
+    # Stop any active refresh timers
+    state_manager.stop_refresh_timer(root)
+    
+    # Reset to the default menu (lock/unlock)
+    switch_to_lock_unlock_menu(root)

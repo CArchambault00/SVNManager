@@ -19,7 +19,7 @@ class StateManager:
             },
             "patches": {
                 "selected_patch": None,
-                "selected_prefix": "S",  # Default prefix
+                "selected_prefix": "",  # Default prefix
                 "prefix_history": []  # Track prefix history
             },
             "modify_patch": {
@@ -76,42 +76,78 @@ class StateManager:
                     patch_details = self.states[menu_name].get("patch_details")
                     original_details = self.states[menu_name].get("original_patch_details")
                 
-                # Reset all state fields to their default empty values
-                self.states[menu_name] = {
-                    "selected_files": [],
-                    "listbox_items": [],
-                    "patch_version": "",
-                    "patch_description": "",
-                    "unlock_files": False
-                }
-                
-                # Special handling for different menus
-                if menu_name == "patches":
-                    self.states[menu_name]["selected_patch"] = None
-                    self.states[menu_name]["selected_prefix"] = "S"
-                elif menu_name == "modify_patch":
-                    if patch_details:
-                        self.states[menu_name]["patch_details"] = patch_details
-                    if original_details:
-                        self.states[menu_name]["original_patch_details"] = original_details
+                # Reset state fields based on menu type
+                if menu_name == "lock_unlock":
+                    self.states[menu_name] = {
+                        "selected_files": [],
+                        "listbox_items": []
+                    }
+                elif menu_name == "patches":
+                    self.states[menu_name] = {
+                        "selected_patch": None,
+                        "selected_prefix": "S",
+                        "prefix_history": []
+                    }
+                else:
+                    # For patch and modify_patch menus
+                    self.states[menu_name] = {
+                        "selected_files": [],
+                        "listbox_items": [],
+                        "patch_version": "",
+                        "patch_description": "",
+                        "unlock_files": False
+                    }
+                    
+                    # Restore patch details for modify_patch menu
+                    if menu_name == "modify_patch":
+                        if patch_details:
+                            self.states[menu_name]["patch_details"] = patch_details
+                        if original_details:
+                            self.states[menu_name]["original_patch_details"] = original_details
         else:
-            # When clearing all states, still preserve modify_patch details
+            # When clearing all states, completely reinitialize the states dictionary
+            # but preserve modify_patch details if they exist
             patch_details = None
             original_details = None
             if "modify_patch" in self.states:
                 patch_details = self.states["modify_patch"].get("patch_details")
                 original_details = self.states["modify_patch"].get("original_patch_details")
             
-            # Clear all states
-            for menu in self.states:
-                self.clear_state(menu)
+            # Completely reinitialize all states to their default values
+            self.states = {
+                "lock_unlock": {
+                    "selected_files": [],
+                    "listbox_items": []
+                },
+                "patch": {
+                    "selected_files": [],
+                    "listbox_items": [],
+                    "patch_version": "",
+                    "patch_description": "",
+                    "unlock_files": False
+                },
+                "patches": {
+                    "selected_patch": None,
+                    "selected_prefix": "",
+                    "prefix_history": []
+                },
+                "modify_patch": {
+                    "selected_files": [],
+                    "listbox_items": [],
+                    "patch_version": "",
+                    "patch_description": "",
+                    "unlock_files": False,
+                    "patch_details": None
+                }
+            }
             
             # Restore modify_patch details if they existed
             if patch_details:
-                if "modify_patch" not in self.states:
-                    self.states["modify_patch"] = {}
-                self.states["modify_patch"]["patch_details"] = patch_details
-                self.states["modify_patch"]["original_patch_details"] = original_details
+                self.states["modify_patch"]["patch_details"] = None
+                self.states["modify_patch"]["original_patch_details"] = None
+            
+            # Reset current menu
+            self.current_menu = None
 
     def set_loading(self, loading: bool) -> None:
         """Set the loading state."""
