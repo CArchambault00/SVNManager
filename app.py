@@ -23,7 +23,7 @@ from version_operation import next_version
 from state_manager import state_manager
 from text_widget_utils import get_text_content, ensure_text_widget_visible
 
-APP_VERSION = "1.0.25"
+APP_VERSION = "1.0.26"
 
 def create_main_layout(root: tk.Tk, left_weight = 2, right_weight = 1) -> Tuple[tk.Frame, tk.Frame, tk.Frame]:
     """
