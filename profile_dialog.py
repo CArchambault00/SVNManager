@@ -242,15 +242,19 @@ class ProfileDialog:
             }
 
             base_relative = get_relative_path(svn_path)
-            base_fake_path = "$/Projects/SVN/" + base_relative
+            if base_relative != "":
+                base_fake_path = "$/Projects/SVN/" + base_relative + "/"
+                base_relative = base_relative + "/"
+            else:
+                base_fake_path = "$/Projects/SVN/"
 
             # Get current max FOLDER_ID once
             cursor.execute("SELECT NVL(MAX(FOLDER_ID), 0) FROM FOLDER")
             next_folder_id = cursor.fetchone()[0] + 1
 
             for folder_type, (suffix, desc_prefix) in folder_map.items():
-                fake_path = f"{base_fake_path}/{suffix}"
-                relative_path = f"{base_relative}/{suffix}"
+                fake_path = f"{base_fake_path}{suffix}"
+                relative_path = f"{base_relative}{suffix}"
                 
                 # Check if path already exists
                 cursor.execute("SELECT COUNT(*) FROM FOLDER WHERE PATH = :1", (fake_path,))
@@ -392,7 +396,7 @@ class ProfileDialog:
             return
             
         # Normalize and check if we're at the root of the SVN repo (no "Projects" in path, and no subfolders)
-        is_root = "Projects" not in svn_path and svn_path.rstrip("/\\").endswith(("jtdev", "jtdev/"))  # adjust if needed
+        is_root = "Projects" not in svn_path and get_relative_path(svn_path) == ""
 
         # S prefix must be used only at the root
         if not is_root and patch_prefix == 'S':
