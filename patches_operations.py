@@ -97,7 +97,8 @@ def build_patch(patch_info):
             ["svn", "info", "--show-item", "wc-root", svn_path],
             capture_output=True,
             text=True,
-            shell=False
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
         ).stdout.strip().replace("\\", "/")
         for file in files:
             if file["FOLDER_TYPE"] == '1':

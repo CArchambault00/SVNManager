@@ -259,29 +259,65 @@ def create_main_sql_file(patch_version_folder, files, patch_name=None, version_i
                     schema_files[schema] = []
                 schema_files[schema].append(file_path)
         
-        # Generate SQL commands for each schema
+        # Generate SQL commands - group PKS and PKB files together per schema, but execute all PKS before PKB within each schema
         for schema, paths in schema_files.items():
-            # Sort files to ensure PKS before PKB
-            paths.sort(key=lambda x: 0 if x.endswith('.PKS') else (1 if x.endswith('.PKB') else 2))
+            # Filter files by type (case-insensitive)
+            pks_files = [path for path in paths if path.upper().endswith('.PKS')]
+            pkb_files = [path for path in paths if path.upper().endswith('.PKB')]
+            other_files = [path for path in paths if not path.upper().endswith('.PKS') and not path.upper().endswith('.PKB')]
             
-            # Add schema connection block
-            sql_commands.extend([
-                "set scan on",
-                f"connect {schema}/{schema}@&&HOST",
-                "set scan off",
-                "set echo off"
-            ])
-            
-            # Add each file in this schema block
-            for file_path in paths:
+            # Execute PKS and PKB files together for this schema (if any exist)
+            if pks_files or pkb_files:
+                # Add schema connection block for PKS and PKB files
                 sql_commands.extend([
-                    f'prompt Loading "{file_path}" ...',
-                    f'@@"{file_path}"',
-                    "show error"
+                    "set scan on",
+                    f"connect {schema}/{schema}@&&HOST",
+                    "set scan off",
+                    "set echo off"
+                ])
+                
+                # Add all PKS files first
+                for file_path in pks_files:
+                    sql_commands.extend([
+                        f'prompt Loading "{file_path}" ...',
+                        f'@@"{file_path}"'
+                    ])
+                
+                # Add all PKB files after PKS files
+                for file_path in pkb_files:
+                    sql_commands.extend([
+                        f'prompt Loading "{file_path}" ...',
+                        f'@@"{file_path}"'
+                    ])
+                
+                # Add show error and end the schema block
+                sql_commands.extend([
+                    "show error",
+                    "set echo on\n"
                 ])
             
-            # End the schema block
-            sql_commands.append("set echo on\n")
+            # Execute other SQL files for this schema (if any exist)
+            if other_files:
+                # Add schema connection block for other files
+                sql_commands.extend([
+                    "set scan on",
+                    f"connect {schema}/{schema}@&&HOST",
+                    "set scan off",
+                    "set echo off"
+                ])
+                
+                # Add each other file in this schema block
+                for file_path in other_files:
+                    sql_commands.extend([
+                        f'prompt Loading "{file_path}" ...',
+                        f'@@"{file_path}"'
+                    ])
+                
+                # Add show error and end the schema block
+                sql_commands.extend([
+                    "show error",
+                    "set echo on\n"
+                ])
         
         # Add version control commands
         sql_commands.extend([

@@ -37,7 +37,8 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True, batch_size=50):
             ["svn", "info", "--show-item", "wc-root", svn_path],
             capture_output=True,
             text=True,
-            shell=False
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
         ).stdout.strip().replace("\\", "/")
 
         # Process files in batches
@@ -107,7 +108,8 @@ def refresh_locked_files(files_listbox):
             ["svn", "info", "--show-item", "wc-root", svn_path],
             capture_output=True,
             text=True,
-            shell=False
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
         ).stdout.strip().replace("\\", "/")
 
         result = subprocess.run(
@@ -193,7 +195,8 @@ def commit_files_batch(selected_files, unlock_files, batch_size=50):
             ["svn", "info", "--show-item", "wc-root", svn_path],
             capture_output=True,
             text=True,
-            shell=False
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
         ).stdout.strip().replace("\\", "/")
 
         for i in range(0, len(selected_files), batch_size):
@@ -345,8 +348,9 @@ def get_file_revision_batch(files, batch_size=50):
             ["svn", "info", "--show-item", "wc-root", svn_path],
             capture_output=True,
             text=True,
-            shell=False
-        ).stdout.strip().replace("\\", "/")    
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        ).stdout.strip().replace("\\", "/")
         # Process one file at a time for working copy paths
         for file in valid_files:
             try:
@@ -410,7 +414,8 @@ def revert_files(selected_files):
             ["svn", "info", "--show-item", "wc-root", svn_path],
             capture_output=True,
             text=True,
-            shell=False
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
         ).stdout.strip().replace("\\", "/")
         for file in selected_files:
             # Run the SVN revert command for each file
@@ -690,7 +695,8 @@ def get_all_locked_files():
             ["svn", "info", "--show-item", "wc-root", svn_path],
             capture_output=True,
             text=True,
-            shell=False
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
         ).stdout.strip().replace("\\", "/")
 
         result = subprocess.run(
@@ -759,7 +765,8 @@ def is_svn_repo_root(path):
             ["svn", "info", path],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
+            creationflags=subprocess.CREATE_NO_WINDOW
         )
 
         info = result.stdout

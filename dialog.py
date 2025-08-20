@@ -107,7 +107,7 @@ def set_username(config_menu, menu_bar):
 def validate_svn_folder(path):
     """Validation function for SVN folder."""
     args = ["svn", "info", path]
-    result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
     return result.returncode == 0
 
 def validate_current_patches(path):
