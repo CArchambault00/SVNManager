@@ -6,11 +6,16 @@ from config import load_config, verify_config, log_error, log_success
 from patch_generation import create_patch_files_batch
 import tkinter as tk
 import time
-from patch_utils import get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file
+from patch_utils import (
+    get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file,
+    setup_patch_folder, create_main_sql_file, get_managed_dest_paths,
+    backup_extra_patch_files, restore_extra_patch_files
+)
 from tkinter import messagebox
 import datetime as date
 from dialog import display_patch_files
 import subprocess
+import shutil
 
 patch_info_dict = {}
 
@@ -180,20 +185,13 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
     config = load_config()
     svn_path = config.get("svn_path")
     username = config.get("username")
+    current_patches = config.get("current_patches", "D:/cyframe/jtdev/Patches/Current")
 
     patch_version_entry = patch_version_entry.upper()
     patch_name = patch_version_prefixe + patch_version_entry
-    
-    # Add old patch folder path to handle cleanup
-    old_patch_name = patch_info_dict.get(patch_name, {}).get("NAME")
-    if old_patch_name:
-        old_patch_folder = os.path.join(config.get("current_patches"), old_patch_name)
-        cleanup_files(old_patch_folder)  # Clean up old patch folder
-        
-    patch_version_folder = os.path.join(config.get("current_patches"), patch_name)
-    # Clean up target folder as well
-    cleanup_files(patch_version_folder)
-    
+    patch_version_folder = os.path.join(current_patches, patch_name)
+    extras_backup = None
+
     try:
         if not patch_version_entry:
             messagebox.showerror("Error", "Patch version is required!")
@@ -207,8 +205,27 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
             if not messagebox.askyesno("No Files Selected", 
                                      "No files selected. Do you want to modify the patch to have no files?"):
                 return
+
+        # Preserve manually-added files (e.g. DB scripts dropped into the patch folder)
+        # that are not part of the locked/unlocked SVN file list.
+        old_files = db.get_patch_file_list_new(patch_id)
+        managed_dests = get_managed_dest_paths(old_files, svn_path)
+
+        old_patch_folder = None
+        for name, info in patch_info_dict.items():
+            if info.get("PATCH_ID") == patch_id:
+                old_patch_folder = os.path.join(current_patches, name)
+                break
+        if old_patch_folder is None:
+            old_patch_folder = patch_version_folder
+
+        extras_backup = backup_extra_patch_files(old_patch_folder, managed_dests)
+
+        if old_patch_folder and os.path.normpath(old_patch_folder) != os.path.normpath(patch_version_folder):
+            cleanup_files(old_patch_folder)
+        cleanup_files(patch_version_folder)
         
-        os.makedirs(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), exist_ok=True)
+        os.makedirs(current_patches, exist_ok=True)
         commit_files(selected_files,unlock_files)
 
         wc_root = subprocess.run(
@@ -250,6 +267,10 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         
         setup_patch_folder(patch_version_folder)
         create_depend_txt(db, patch_version_folder, patch_id)
+
+        # Put back manually-added files that were not part of the SVN file list
+        restore_extra_patch_files(extras_backup, patch_version_folder)
+        extras_backup = None
         
         db.conn.commit()
         
@@ -281,6 +302,8 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         db.conn.rollback()
         # Clean up any partially created files on error
         cleanup_files(patch_version_folder)
+        if extras_backup and os.path.exists(extras_backup):
+            shutil.rmtree(extras_backup, ignore_errors=True)
         error_msg = f"Failed to update patch: {str(e)}"
         print(error_msg)
         log_error(error_msg, include_stack=True)

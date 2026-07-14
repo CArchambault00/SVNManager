@@ -240,3 +240,74 @@ def remove_selected_patch(patches_listbox):
     # If removal was successful, remove the item from the treeview
     if result:
         patches_listbox.delete(selected_items[0])
+
+def open_file_location(files_listbox):
+    """
+    Open the file location of the selected file in Windows File Explorer.
+    
+    Args:
+        files_listbox: The treeview containing the files
+    """
+    selected_items = files_listbox.selection()
+    if not selected_items:
+        messagebox.showwarning("No Selection", "Please select a file to open its location")
+        return
+    
+    if len(selected_items) > 1:
+        messagebox.showwarning("Multiple Selection", "Please select only one file to open its location")
+        return
+    
+    # Get the file path from the selected item (assuming it's in column index 2)
+    relative_file_path = files_listbox.item(selected_items[0], "values")[2]
+    
+    # Get the SVN path from config to build the full path
+    config = load_config()
+    svn_path = config.get("svn_path")
+    
+    if not svn_path:
+        messagebox.showerror("Error", "SVN path not configured")
+        return
+    
+    # Get SVN working copy root to build correct path
+    try:
+        wc_root = subprocess.run(
+            ["svn", "info", "--show-item", "wc-root", svn_path],
+            capture_output=True,
+            text=True,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        ).stdout.strip().replace("\\", "/")
+    except subprocess.SubprocessError as e:
+        messagebox.showerror("Error", f"Failed to get SVN working copy root: {e}")
+        return
+    
+    # Build the full file path using working copy root
+    full_file_path = os.path.join(wc_root, relative_file_path).replace("/", "\\")
+    
+    # Check if the file exists
+    if not os.path.exists(full_file_path):
+        messagebox.showerror("Error", f"File not found: {full_file_path}")
+        return
+    
+    try:
+        # Alternative approach: Use subprocess.Popen with proper argument handling
+        import sys
+        
+        # Normalize the path for Windows
+        normalized_path = os.path.normpath(full_file_path)
+        
+        # Use subprocess.Popen with list arguments to avoid shell parsing issues
+        subprocess.Popen([
+            'explorer.exe', 
+            '/select,', 
+            normalized_path
+        ], creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0)
+        
+    except Exception as e:
+        try:
+            # Fallback: Just open the directory containing the file
+            directory = os.path.dirname(full_file_path)
+            os.startfile(directory)
+        except Exception as fallback_error:
+            messagebox.showerror("Error", f"Failed to open file location: {e}\nFallback also failed: {fallback_error}")
+    

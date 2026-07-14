@@ -9,7 +9,7 @@ from patches_operations import (
     build_patch, get_full_patch_info
 )
 from config import load_config, log_error
-from buttons_function import next_version, view_selected_file_native_diff
+from buttons_function import next_version, view_selected_file_native_diff, open_file_location
 
 class ContextMenuManager:
     """Manages context menus for different UI sections."""
@@ -49,6 +49,8 @@ class ContextMenuManager:
                     menu.add_command(label="Refresh Locked files", 
                                 command=lambda: refresh_locked_files(listbox))
                     menu.add_separator()
+                    menu.add_command(label="Open file location",
+                                   command=lambda: open_file_location(listbox))
                     menu.add_command(label="View Diff", 
                                    command=lambda: view_selected_file_native_diff(listbox))
                     menu.add_command(label="Remove selected files", 
@@ -70,6 +72,8 @@ class ContextMenuManager:
                     menu.add_command(label="Remove selected files", 
                                 command=lambda: self._remove_from_patch(listbox))
                     menu.add_separator()
+                    menu.add_command(label="Open file location",
+                                   command=lambda: open_file_location(listbox))
                     menu.add_command(label="View Diff", 
                                    command=lambda: view_selected_file_native_diff(listbox))
                 if menu_name == "locked_files":
@@ -81,6 +85,8 @@ class ContextMenuManager:
                     menu.add_command(label="Add to Patch",
                                    command=lambda: self._add_to_main_treeview(listbox))
                     menu.add_separator()
+                    menu.add_command(label="Open file location",
+                                   command=lambda: open_file_location(listbox))
                     menu.add_command(label="View Diff", 
                                    command=lambda: view_selected_file_native_diff(listbox))
             else:

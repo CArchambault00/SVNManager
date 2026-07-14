@@ -2,10 +2,21 @@ import hashlib
 from tkinter import messagebox
 import shutil
 import os
+import tempfile
 from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision, get_file_revision_batch, get_file_head_revision, get_file_head_revision_batch, get_relative_path
 from db_handler import dbClass
 import time
 from config import log_error, load_config
+
+# Auto-generated / scaffolding files at the patch folder root — always rebuilt.
+GENERATED_PATCH_ROOT_FILES = frozenset({
+    "ReadMe.txt",
+    "MainSQL.sql",
+    "depend.txt",
+    "InstallConfig.exe",
+    "RunScript.bat",
+    "UNDERTEST_InstallConfig.exe",
+})
 
 def get_md5_checksum(file_path):
     """Returns the MD5 checksum of a given file."""
@@ -18,7 +29,98 @@ def get_md5_checksum(file_path):
         return md5_hash.hexdigest()
     except Exception as e:
         raise Exception(f"Error calculating MD5 checksum for {file_path}: {e}")
-    
+
+def map_svn_file_to_patch_dest(file_path, svn_path=None):
+    """Map an SVN-relative path to its destination path inside the patch folder."""
+    file_path_no_svn = file_path.replace("\\", "/")
+    if svn_path:
+        rel = get_relative_path(svn_path)
+        if rel and file_path_no_svn.startswith(rel):
+            file_path_no_svn = file_path_no_svn.replace(rel, "", 1).lstrip("/")
+
+    if file_path_no_svn.startswith("webpage"):
+        return file_path_no_svn.replace("webpage", "Web", 1)
+    if file_path_no_svn.startswith("Database"):
+        return file_path_no_svn.replace("Database", "DB", 1).replace("StoredProcedures", "SP")
+    return None
+
+def map_db_file_to_patch_dest(file_info):
+    """Map a get_patch_file_list_new row to its destination path inside the patch folder."""
+    path = file_info["PATH"].replace("\\", "/")
+    svn_path = (file_info.get("SVN_PATH") or "").replace("\\", "/")
+
+    if file_info["FOLDER_TYPE"] == '1':
+        if svn_path:
+            path = path.replace(svn_path, "Web")
+        path = path.replace("webpage", "Web")
+    else:
+        if svn_path:
+            path = path.replace(svn_path, "DB")
+        path = path.replace("StoredProcedures", "SP").replace("Database", "DB")
+    return path
+
+def get_managed_dest_paths(files, svn_path=None):
+    """Return the set of relative destination paths managed by the patch build."""
+    managed = set()
+    for file in files:
+        if isinstance(file, dict):
+            dest = map_db_file_to_patch_dest(file)
+        else:
+            dest = map_svn_file_to_patch_dest(file, svn_path)
+        if dest:
+            managed.add(dest.replace("\\", "/"))
+    return managed
+
+def backup_extra_patch_files(patch_version_folder, managed_dest_paths):
+    """
+    Back up files that were manually added to the patch folder (not from
+    locked/unlocked SVN files and not auto-generated scaffolding).
+
+    Returns a temp directory path containing the extras, or None if there are none.
+    """
+    if not patch_version_folder or not os.path.exists(patch_version_folder):
+        return None
+
+    managed = {p.replace("\\", "/") for p in managed_dest_paths}
+    temp_dir = None
+
+    for root, _dirs, files in os.walk(patch_version_folder):
+        for name in files:
+            abs_path = os.path.join(root, name)
+            rel_path = os.path.relpath(abs_path, patch_version_folder).replace("\\", "/")
+
+            # Skip auto-generated root scaffolding
+            if "/" not in rel_path and name in GENERATED_PATCH_ROOT_FILES:
+                continue
+            # Skip files that come from the patch's managed SVN file list
+            if rel_path in managed:
+                continue
+
+            if temp_dir is None:
+                temp_dir = tempfile.mkdtemp(prefix="patch_extras_")
+
+            dest = os.path.join(temp_dir, rel_path)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            shutil.copy2(abs_path, dest)
+
+    return temp_dir
+
+def restore_extra_patch_files(temp_dir, patch_version_folder):
+    """Restore manually-added patch files from a backup temp directory."""
+    if not temp_dir or not os.path.exists(temp_dir):
+        return
+
+    try:
+        for root, _dirs, files in os.walk(temp_dir):
+            for name in files:
+                abs_path = os.path.join(root, name)
+                rel_path = os.path.relpath(abs_path, temp_dir)
+                dest = os.path.join(patch_version_folder, rel_path)
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                shutil.copy2(abs_path, dest)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
 def cleanup_files(patch_version_folder):
     """Clean up patch files with retry logic and proper error handling."""
     if not os.path.exists(patch_version_folder):
