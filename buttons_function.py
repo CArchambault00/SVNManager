@@ -25,6 +25,9 @@ def insert_next_version(application_id, patch_version_entry):
         patch_version_entry.config(state="normal")
 
 def deselect_all_rows(event, files_listbox):
+    # Heading clicks must not be treated as empty-area clicks (they sort columns).
+    if files_listbox.identify_region(event.x, event.y) == "heading":
+        return
     if not files_listbox.identify_row(event.y):  # Check if click is on an empty area
         files_listbox.selection_remove(files_listbox.selection())
 

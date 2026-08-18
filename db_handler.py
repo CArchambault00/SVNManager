@@ -219,14 +219,21 @@ class dbClass:
         return patch_id
     
 
-    def update_patch_header(self, patch_id: int, patch_version_prefixe: str, patch_version: str,comments: str) -> int:
+    def update_patch_header(self, patch_id: int, patch_version_prefixe: str, patch_version: str, comments: str,
+                            major: Optional[int] = None, minor: Optional[int] = None, revision: Optional[int] = None) -> int:
         sql = """
         UPDATE PATCH_HEADER SET NAME = :patch_name, COMMENTS = :comments, CREATION_DATE = SYSDATE
-        WHERE PATCH_ID = :patch_id
         """
-        self.execute_non_query(sql, {'patch_name': patch_version_prefixe + patch_version, 'comments': comments, 'patch_id': patch_id})
-        # sql = "DELETE FROM PATCH_DETAIL WHERE PATCH_ID = :patch_id"
-        # self.execute_non_query(sql, {'patch_id': patch_id})
+        params = {
+            'patch_name': patch_version_prefixe + patch_version,
+            'comments': comments,
+            'patch_id': patch_id
+        }
+        if major is not None and minor is not None and revision is not None:
+            sql += ", MAJOR = :major, MINOR = :minor, REVISION = :revision"
+            params.update({'major': major, 'minor': minor, 'revision': revision})
+        sql += " WHERE PATCH_ID = :patch_id"
+        self.execute_non_query(sql, params)
         return patch_id
 
     def delete_patch_detail(self, patch_id: int):
@@ -265,7 +272,13 @@ class dbClass:
 
         sql += """
         GROUP BY H.PATCH_ID, D.PATCH_ID, H.NAME, H.COMMENTS, H.USER_ID, H.CREATION_DATE
-        ORDER BY PATCH_ID DESC
+        ORDER BY
+            CASE
+                WHEN INSTR(H.NAME, '.', 1, 2) > 0 THEN
+                    TO_NUMBER(REGEXP_REPLACE(SUBSTR(H.NAME, INSTR(H.NAME, '.', 1, 2) + 1), '[^0-9].*$', ''))
+                ELSE 0
+            END DESC,
+            H.PATCH_ID DESC
         """
         return self.execute_query(sql)
 
@@ -320,8 +333,18 @@ class dbClass:
         sql = f"SELECT MAJOR, MINOR FROM CURRENT_VERSION WHERE APPLICATION_ID = '{application_id}'"
         result = self.execute_query(sql)
         major, minor = (result[0]['MAJOR'], result[0]['MINOR']) if result else (1, 0)
+        # Use the version number from NAME (what users see) rather than the REVISION
+        # column. Those can diverge if someone clicks Next then manually edits the name.
         sql = f"""
-        SELECT NVL(MAX(REVISION), 0) AS REVISION, NVL(MAX(MAJOR), :major) AS MAJOR, NVL(MAX(MINOR), :minor) AS MINOR
+        SELECT NVL(MAX(
+            CASE
+                WHEN INSTR(NAME, '.', 1, 2) > 0 THEN
+                    TO_NUMBER(REGEXP_REPLACE(SUBSTR(NAME, INSTR(NAME, '.', 1, 2) + 1), '[^0-9].*$', ''))
+                ELSE REVISION
+            END
+        ), 0) AS REVISION,
+        NVL(MAX(MAJOR), :major) AS MAJOR,
+        NVL(MAX(MINOR), :minor) AS MINOR
         FROM PATCH_HEADER
         WHERE DELETED_YN = 'N' AND TEMP_YN = 'N'
         AND MAJOR = :major AND MINOR = :minor

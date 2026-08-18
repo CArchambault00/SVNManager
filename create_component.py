@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import ttk
 from tkinterdnd2 import DND_FILES
 from typing import Callable
@@ -7,6 +8,7 @@ from buttons_function import select_all_rows, deselect_all_rows, handle_drop, re
 from svn_operations import refresh_locked_files, refresh_file_status_version, lock_files, unlock_files
 from datetime import datetime
 from context_menu import context_menu_manager
+from version_operation import parse_version
 
 # Constants for column configurations
 TREEVIEW_COLUMNS = [
@@ -23,6 +25,14 @@ LISTBOX_COLUMNS = [
     ("Files Path", 400),
     ("Lock Date", 120),
 ]
+
+def configure_treeview_style(root: tk.Widget = None) -> None:
+    """Use a compact, uniform row height so each Treeview shows a single line of text."""
+    style = ttk.Style(root)
+    default_font = tkfont.nametofont("TkDefaultFont")
+    # Tight enough to clip a wrapped second line, without cutting the first line.
+    rowheight = default_font.metrics("linespace") + 2
+    style.configure("Treeview", rowheight=rowheight)
 
 def add_scrollbars(widget: ttk.Treeview, parent: tk.Widget) -> None:
     """
@@ -58,6 +68,7 @@ def create_patches_treeview(parent: tk.Widget, switch_to_modify_patch_menu: Call
     """
     Create a Treeview widget to display patches.
     """
+    configure_treeview_style(parent)
     treeview = ttk.Treeview(
         parent,
         columns=[col[0] for col in TREEVIEW_COLUMNS],
@@ -65,9 +76,7 @@ def create_patches_treeview(parent: tk.Widget, switch_to_modify_patch_menu: Call
         selectmode="browse",
     )
 
-    for col_name, col_width in TREEVIEW_COLUMNS:
-        treeview.heading(col_name, text=col_name)
-        treeview.column(col_name, width=col_width, stretch=tk.NO)
+    apply_sortable_columns(treeview, TREEVIEW_COLUMNS)
     treeview.bind("<Button-1>", lambda event: deselect_all_rows(event, treeview))
     add_scrollbars(treeview, parent)
     context_menu_manager.create_patches_menu(treeview, switch_to_modify_patch_menu)  # Pass the callback
@@ -77,6 +86,7 @@ def create_patches_treeview(parent: tk.Widget, switch_to_modify_patch_menu: Call
 
 def create_file_listbox(parent: tk.Widget, menu_name: str = "filebox") -> ttk.Treeview:
     """Create a Listbox widget to display files with drag-and-drop support."""
+    configure_treeview_style(parent)
     listbox = ttk.Treeview(
         parent,
         columns=[col[0] for col in LISTBOX_COLUMNS],
@@ -84,9 +94,7 @@ def create_file_listbox(parent: tk.Widget, menu_name: str = "filebox") -> ttk.Tr
         selectmode="extended",  # Allow multiple selection
     )
 
-    for col_name, col_width in LISTBOX_COLUMNS:
-        listbox.heading(col_name, text=col_name, command=lambda _col=col_name: sort_treeview_column(listbox, _col, False))
-        listbox.column(col_name, width=col_width, stretch=tk.NO)
+    apply_sortable_columns(listbox, LISTBOX_COLUMNS)
 
     add_scrollbars(listbox, parent)
     context_menu_manager.create_files_menu(listbox, menu_name=menu_name)  # Use context menu manager directly
@@ -101,32 +109,72 @@ def create_file_listbox(parent: tk.Widget, menu_name: str = "filebox") -> ttk.Tr
 
     return listbox
 
+def apply_sortable_columns(treeview: ttk.Treeview, columns) -> None:
+    """Configure column headings so each one sorts when clicked."""
+    for col_name, col_width in columns:
+        treeview.heading(
+            col_name,
+            text=col_name,
+            command=lambda _col=col_name: sort_treeview_column(treeview, _col, False),
+        )
+        treeview.column(col_name, width=col_width, stretch=tk.NO)
+
+
+def _column_sort_key(col: str, value: str):
+    """Return a comparable key for the given column value."""
+    if col in ("Lock Date", "Date"):
+        return parse_date(value)
+    if col in ("Size", "Version"):
+        try:
+            return (0, int(value))
+        except (TypeError, ValueError):
+            return (1, str(value).lower())
+    if col == "Patch Version":
+        parsed = parse_version(value)
+        if parsed:
+            return (0, parsed.major, parsed.minor, parsed.revision)
+        return (1, str(value).lower())
+    return str(value).lower()
+
+
 def sort_treeview_column(treeview: ttk.Treeview, col: str, reverse: bool) -> None:
     """
-    Sort the Treeview column.
+    Sort the Treeview by the given column. Clicking again reverses the order.
     """
-    data = [(treeview.set(child, col), child) for child in treeview.get_children('')]
-
-    # Sort by date if the column is "Lock Date"
-    if col == "Lock Date":
-        data.sort(key=lambda item: parse_date(item[0]), reverse=reverse)
-    else:
-        data.sort(reverse=reverse)
+    data = [(treeview.set(child, col), child) for child in treeview.get_children("")]
+    data.sort(key=lambda item: _column_sort_key(col, item[0]), reverse=reverse)
 
     for index, (_, child) in enumerate(data):
-        treeview.move(child, '', index)
+        treeview.move(child, "", index)
 
-    # Reverse the sorting order for the next click
-    treeview.heading(col, command=lambda: sort_treeview_column(treeview, col, not reverse))
+    for column in treeview["columns"]:
+        heading_text = column
+        next_reverse = False
+        if column == col:
+            heading_text = f"{column} {'▼' if reverse else '▲'}"
+            next_reverse = not reverse
+        treeview.heading(
+            column,
+            text=heading_text,
+            command=lambda _col=column, _rev=next_reverse: sort_treeview_column(treeview, _col, _rev),
+        )
 
 def parse_date(date_str: str) -> datetime:
     """
     Parse a date string into a datetime object. Return a default date if parsing fails.
     """
+    if not date_str:
+        return datetime.min
+    value = str(date_str).strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
     try:
-        return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+        return datetime.fromisoformat(value)
     except ValueError:
-        return datetime.min  # Default to the earliest possible date
+        return datetime.min
 
 def create_top_frame(
     parent: tk.Widget,

@@ -13,7 +13,7 @@ from patch_utils import (
 )
 from tkinter import messagebox
 import datetime as date
-from dialog import display_patch_files
+from version_operation import parse_version
 import subprocess
 import shutil
 
@@ -38,7 +38,7 @@ def refresh_patches(treeview, temp, application_id, username):
     for patch in patches:
         # Replace None or empty fields with ""
         name = patch.get("NAME") or ""
-        comments = patch.get("COMMENTS") or ""
+        comments = (patch.get("COMMENTS") or "").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
         patch_size = patch.get("PATCH_SIZE") or 0
         user_id = patch.get("USER_ID") or ""
         creation_date = patch.get("CREATION_DATE") or ""
@@ -237,7 +237,12 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         ).stdout.strip().replace("\\", "/")
 
         db.conn.begin()
-        db.update_patch_header(patch_id, patch_version_prefixe, patch_version_entry, patch_description)
+        parsed_version = parse_version(patch_version_entry)
+        if parsed_version:
+            db.update_patch_header(patch_id, patch_version_prefixe, patch_version_entry, patch_description,
+                                   parsed_version.major, parsed_version.minor, parsed_version.revision)
+        else:
+            db.update_patch_header(patch_id, patch_version_prefixe, patch_version_entry, patch_description)
         db.delete_patch_detail(patch_id)
         
         os.makedirs(patch_version_folder, exist_ok=True)

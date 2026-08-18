@@ -7,7 +7,7 @@ from config import load_config
 from db_handler import dbClass
 from tkinter import messagebox
 from profiles import get_profile
-from create_component import LISTBOX_COLUMNS  # Import add_scrollbars from create_component
+from create_component import LISTBOX_COLUMNS, apply_sortable_columns
 from text_widget_utils import ensure_text_widget_visible
 from context_menu import context_menu_manager
 
@@ -132,9 +132,7 @@ def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_s
     
     locked_files_treeview.bind("<Button-1>", lambda event: deselect_all_rows(event, locked_files_treeview))
     locked_files_treeview.bind("<Control-a>", lambda event: select_all_rows(event, locked_files_treeview))
-    for col_name, col_width in LISTBOX_COLUMNS:
-        locked_files_treeview.heading(col_name, text=col_name)
-        locked_files_treeview.column(col_name, width=col_width, stretch=tk.NO)
+    apply_sortable_columns(locked_files_treeview, LISTBOX_COLUMNS)
     
     # Add scrollbars for the locked files treeview
     v_scrollbar = tk.Scrollbar(locked_files_frame, orient="vertical", command=locked_files_treeview.yview)
@@ -264,9 +262,7 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
         height=8  # Set a reasonable height for better visibility
     )
     
-    for col_name, col_width in LISTBOX_COLUMNS:
-        locked_files_treeview.heading(col_name, text=col_name)
-        locked_files_treeview.column(col_name, width=col_width, stretch=tk.NO)
+    apply_sortable_columns(locked_files_treeview, LISTBOX_COLUMNS)
     
     # Add scrollbars for the locked files treeview
     v_scrollbar = tk.Scrollbar(locked_files_frame, orient="vertical", command=locked_files_treeview.yview)

@@ -11,7 +11,7 @@ from typing import Tuple, Optional, Dict, Any, List, Callable
 # Local modules
 from svn_operations import refresh_locked_files, get_file_info, refresh_file_status_version
 from patches_operations import refresh_patches, refresh_patch_files
-from create_component import create_patches_treeview, create_file_listbox, create_top_frame
+from create_component import create_patches_treeview, create_file_listbox, create_top_frame, configure_treeview_style
 from create_buttons import (
     create_button_frame, create_button_frame_patch, 
     create_button_frame_modify_patch, create_button_frame_patches
@@ -786,6 +786,7 @@ def setup_gui() -> tk.Tk:
     root.iconbitmap(icon_path)
     root.title("SVN Manager")
     root.geometry("1000x600")
+    configure_treeview_style(root)
 
     # Check for the latest version
     check_latest_version(root)

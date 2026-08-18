@@ -48,6 +48,13 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         if not selected_files or len(selected_files) == 0:
             if not messagebox.askyesno("No Files Selected", "No files selected. Do you want to create an empty patch?"):
                 return
+
+        parsed_version = vo.parse_version(patch_version)
+        if not parsed_version:
+            messagebox.showerror("Error", "Invalid patch version format! Expected major.minor.revision-suffix\n"
+                                 "Example: 1.0.0956-W0")
+            return
+        vo.set_current_version(parsed_version)
         
         db.conn.begin()
 
@@ -57,7 +64,7 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
                             "You might want to update the existing patch or use the next version.")
 
         os.makedirs(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), exist_ok=True)
-        
+
         # Commit files in batches
         BATCH_SIZE = 50
         for i in range(0, len(selected_files), BATCH_SIZE):
@@ -66,7 +73,7 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         
         
         patch_id = db.create_patch_header(patch_prefixe, patch_version, patch_description, username, 
-                                        False, vo.major, vo.minor, vo.revision)
+                                        False, parsed_version.major, parsed_version.minor, parsed_version.revision)
         
         os.makedirs(patch_version_folder, exist_ok=True)
         
@@ -115,7 +122,7 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         create_readme_file(patch_version_folder, patch_name, username, 
                          time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)
         
-        create_main_sql_file(patch_version_folder, selected_files, version_info=(vo.major, vo.minor, vo.revision), application_id=application_id)
+        create_main_sql_file(patch_version_folder, selected_files, version_info=(parsed_version.major, parsed_version.minor, parsed_version.revision), application_id=application_id)
         
         setup_patch_folder(patch_version_folder)
         create_depend_txt(db, patch_version_folder, patch_id)
