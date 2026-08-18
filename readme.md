@@ -42,7 +42,7 @@ The SVN Manager application is a graphical user interface (GUI) tool designed to
      ```sh
      python app.py
      ```
-   - OR run the executable file [SVNManager.exe](./SVNManager.exe)
+   - OR download `SVNManager.zip` from [GitHub Releases](https://github.com/CArchambault00/SVNManager/releases), extract it, and run `SVNManager.exe` from inside the extracted folder (do not copy the `.exe` alone).
 
 2. **Configure the config for the app**
    - Red button and square will appear if `svn_path`, `username` and `instant_client` isn't define
@@ -128,3 +128,4 @@ The SVN Manager application is a graphical user interface (GUI) tool designed to
 
 - Ensure the [svn_config.json](http://_vscodecontentref_/14) file is included in the [.gitignore](http://_vscodecontentref_/15) to avoid committing sensitive information.
 - The application assumes the presence of TortoiseSVN and Oracle database client for certain operations. Adjust paths and configurations as needed.
+- Antivirus (especially AVG) may flag unsigned Python EXEs. Current releases ship as a zip folder to avoid the old single-file false positive. See [SECURITY.md](./SECURITY.md).

@@ -16,6 +16,7 @@ import datetime as date
 from version_operation import parse_version
 import subprocess
 import shutil
+from dialog import display_patch_files
 
 patch_info_dict = {}
 

@@ -254,8 +254,7 @@ def refresh_available_locked_files_from_menu(listbox):
     """Refresh locked files from context menu"""
     main_treeview = find_main_treeview(listbox)
     if main_treeview:
-        from create_buttons import refresh_available_locked_files
-        refresh_available_locked_files(listbox, main_treeview)
+        context_menu_manager.refresh_available_locked_files(listbox, main_treeview)
 
 def find_locked_files_treeview(listbox):
     """Find the locked files treeview that corresponds to this main treeview"""

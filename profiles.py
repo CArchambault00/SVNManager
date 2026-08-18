@@ -1,8 +1,7 @@
 import os
 import json
 from typing import Dict, List, Optional
-
-PROFILES_FILE = "svn_profiles.json"
+from user_data import PROFILES_FILE
 
 class Profile:
     def __init__(self, name: str, svn_path: str, patch_prefix: List[str], current_patches: str, dsn_name: str):

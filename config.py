@@ -3,10 +3,8 @@ import json
 from tkinter import messagebox
 import datetime as date
 from profiles import get_profile
+from user_data import CONFIG_FILE, ERROR_LOG_FILE, SUCCESS_LOG_FILE
 
-CONFIG_FILE = "svn_config.json"
-ERROR_LOG_FILE = "SVNManager_error.log"
-SUCCESS_LOG_FILE = "SVNManager_success.log"
 neededVar = ["username"]  # Only username is required globally
 
 def load_config():

@@ -4,7 +4,7 @@ import random
 import urllib.request
 import webbrowser
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from tkinterdnd2 import TkinterDnD
 from typing import Tuple, Optional, Dict, Any, List, Callable
 
@@ -18,6 +18,12 @@ from create_buttons import (
 )
 from context_menu import context_menu_manager
 from config import load_config, get_unset_var, log_error
+from user_data import (
+    get_migration_message,
+    should_prompt_for_legacy_settings,
+    import_from_folder,
+    mark_settings_ready,
+)
 from native_topbar import initialize_native_topbar
 from version_operation import next_version
 from state_manager import state_manager
@@ -698,8 +704,11 @@ def check_latest_version(root: tk.Tk) -> None:
             latest_version = response.read().decode("utf-8").strip()
 
         if latest_version != APP_VERSION:
-            if messagebox.askyesno("Update Available", 
-                                 f"A new version ({latest_version}) is available.\nDo you want to open the download page?"):
+            if messagebox.askyesno("Update Available",
+                                 f"A new version ({latest_version}) is available.\n"
+                                 "Download SVNManager.zip, extract it, and run "
+                                 "SVNManager.exe from inside that folder.\n\n"
+                                 "Open the download page now?"):
                 release_url = f"https://github.com/CArchambault00/SVNManager/releases/tag/{latest_version}"
                 webbrowser.open(release_url)
             sys.exit(0)
@@ -770,6 +779,53 @@ def setup_dnd_safely(listbox, buttons_frame, callback) -> None:
     # Initial attempt after a short delay
     listbox.after(50, schedule_dnd_binding)
 
+
+def _offer_settings_migration(root: tk.Tk) -> None:
+    """Copy old next-to-exe settings into AppData, or let the user pick that folder once."""
+    migration_message = get_migration_message()
+    if migration_message:
+        messagebox.showinfo("Settings copied", migration_message)
+        mark_settings_ready()
+        return
+
+    if not should_prompt_for_legacy_settings():
+        return
+
+    locate = messagebox.askyesno(
+        "Existing settings",
+        "If you used SVN Manager before, pick the folder that contains "
+        "svn_config.json and svn_profiles.json.\n\n"
+        "Those files will be copied into AppData. After that you can delete the "
+        "originals — reopening the app or downloading a new release will keep "
+        "using the AppData copy.",
+        parent=root,
+    )
+    if not locate:
+        mark_settings_ready()
+        return
+
+    folder = filedialog.askdirectory(
+        title="Select the folder that contains svn_config.json and svn_profiles.json",
+        parent=root,
+    )
+    if not folder:
+        return
+
+    imported = import_from_folder(folder)
+    if imported:
+        messagebox.showinfo("Settings copied", get_migration_message(), parent=root)
+        mark_settings_ready()
+        return
+
+    messagebox.showwarning(
+        "Settings not found",
+        "svn_config.json and svn_profiles.json were not found in that folder.\n"
+        "You can try again the next time you open SVN Manager, or set your "
+        "username and profiles from the menus.",
+        parent=root,
+    )
+
+
 def setup_gui() -> tk.Tk:
     """Initialize and set up the GUI for the application."""
     global root
@@ -787,6 +843,8 @@ def setup_gui() -> tk.Tk:
     root.title("SVN Manager")
     root.geometry("1000x600")
     configure_treeview_style(root)
+
+    _offer_settings_migration(root)
 
     # Check for the latest version
     check_latest_version(root)
