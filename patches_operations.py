@@ -9,7 +9,7 @@ import time
 from patch_utils import (
     get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file,
     setup_patch_folder, create_main_sql_file, get_managed_dest_paths,
-    backup_extra_patch_files, restore_extra_patch_files
+    backup_extra_patch_files, restore_extra_patch_files, backup_existing_main_sql
 )
 from tkinter import messagebox
 import datetime as date
@@ -220,6 +220,8 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         if old_patch_folder is None:
             old_patch_folder = patch_version_folder
 
+        # Keep the current MainSQL.sql as MainSQL (N).sql before the folder is rebuilt.
+        backup_existing_main_sql(old_patch_folder)
         extras_backup = backup_extra_patch_files(old_patch_folder, managed_dests)
 
         if old_patch_folder and os.path.normpath(old_patch_folder) != os.path.normpath(patch_version_folder):

@@ -2,6 +2,7 @@ import hashlib
 from tkinter import messagebox
 import shutil
 import os
+import re
 import tempfile
 from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision, get_file_revision_batch, get_file_head_revision, get_file_head_revision_batch, get_relative_path
 from db_handler import dbClass
@@ -17,6 +18,9 @@ GENERATED_PATCH_ROOT_FILES = frozenset({
     "RunScript.bat",
     "UNDERTEST_InstallConfig.exe",
 })
+
+MAIN_SQL_FILENAME = "MainSQL.sql"
+MAIN_SQL_BACKUP_RE = re.compile(r"^MainSQL \((\d+)\)\.sql$", re.IGNORECASE)
 
 def get_md5_checksum(file_path):
     """Returns the MD5 checksum of a given file."""
@@ -70,6 +74,39 @@ def get_managed_dest_paths(files, svn_path=None):
         if dest:
             managed.add(dest.replace("\\", "/"))
     return managed
+
+def _next_main_sql_backup_index(patch_version_folder):
+    """Return the next unused N for MainSQL (N).sql in the patch folder root."""
+    max_n = 0
+    try:
+        names = os.listdir(patch_version_folder)
+    except OSError:
+        return 1
+    for name in names:
+        match = MAIN_SQL_BACKUP_RE.match(name)
+        if match:
+            max_n = max(max_n, int(match.group(1)))
+    return max_n + 1
+
+def backup_existing_main_sql(patch_version_folder):
+    """
+    Turn the current MainSQL.sql into a numbered backup before the patch is rebuilt.
+
+    First modify → MainSQL (1).sql, second → MainSQL (2).sql, and so on.
+    Previous backups are left in place. Returns the backup path, or None if there
+    was no MainSQL.sql to keep.
+    """
+    if not patch_version_folder or not os.path.exists(patch_version_folder):
+        return None
+
+    src = os.path.join(patch_version_folder, MAIN_SQL_FILENAME)
+    if not os.path.isfile(src):
+        return None
+
+    n = _next_main_sql_backup_index(patch_version_folder)
+    dest = os.path.join(patch_version_folder, f"MainSQL ({n}).sql")
+    shutil.copy2(src, dest)
+    return dest
 
 def backup_extra_patch_files(patch_version_folder, managed_dest_paths):
     """

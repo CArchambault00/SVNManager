@@ -1,0 +1,23 @@
+---
+description: Always add or update pytest coverage with code changes
+alwaysApply: true
+---
+
+# Always Write Tests
+
+When changing application behavior (feature, bugfix, refactor with logic change):
+
+1. **Same delivery**: add or update pytest under `tests/unit/`, `tests/integration/`, or `tests/e2e/`.
+2. **Layer**: prefer unit for pure helpers; integration for SVN/DB workflows; e2e only for GUI navigation/smoke.
+3. **Mocks only**: never call real Oracle or SVN. Mock `dbClass`, `subprocess`/`svn`, and `messagebox` (use fixtures in `tests/conftest.py`).
+4. **Done means green**: run `pytest` locally; do not consider the task finished without tests for the touched behavior.
+5. **Exceptions**: docs-only, build scripts (`compile_app*.sh`, `*.spec`), or pure comment/formatting changes.
+
+```text
+# ✅ GOOD — new mapping helper
+# patch_utils.py + tests/unit/test_patch_utils.py
+
+# ❌ BAD — change generate_patch validation with no test
+```
+
+Place new tests next to the existing file for that module when possible.
