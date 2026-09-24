@@ -115,11 +115,12 @@ def save_current_state(root_widget) -> None:
                 if current_menu in ["lock_unlock", "patch", "modify_patch"]:
                     selected_files = []
                     listbox_items = []
-                    
+                    selected_ids = set(file_listbox.selection())
+
                     for item_id in file_listbox.get_children():
                         values = file_listbox.item(item_id, "values")
                         listbox_items.append(values)
-                        if item_id in file_listbox.selection():
+                        if item_id in selected_ids:
                             selected_files.append(values[2])  # File path is at index 2
                     
                     state_manager.save_state(current_menu, 
@@ -205,8 +206,15 @@ def switch_to_lock_unlock_menu(root_widget=None) -> None:
                 if values and values[2] in lock_unlock_state["selected_files"]:
                     files_listbox.selection_add(item_id)
     else:
-        # No saved state, refresh from SVN
-        refresh_locked_files(files_listbox)
+        # No saved state — load from SVN under a busy dialog
+        from busy_ops import load_locked_files_busy
+
+        load_locked_files_busy(
+            root_widget,
+            files_listbox,
+            title="Loading locked files",
+            tags=("unchecked",),
+        )
     
     # Set the current menu
     state_manager.current_menu = "lock_unlock"
@@ -275,23 +283,15 @@ def switch_to_patch_menu(root_widget=None) -> None:
                     if values and values[2] in patch_state["selected_files"]:
                         files_listbox.selection_add(item_id)
 
-        refresh_file_status_version(files_listbox)
-        
-        # Always refresh ONLY the locked files treeview
-        if "locked_files_treeview" in buttons_frame:
-            context_menu_manager.refresh_available_locked_files(
-                buttons_frame["locked_files_treeview"], 
-                files_listbox
-            )
-    
         # Create drag and drop callback
         def on_drop_with_state_preservation(event):
             from buttons_function import handle_drop
+            from file_transfer import prune_locked_files_already_in_main
             handle_drop(event, files_listbox)
             root = files_listbox.winfo_toplevel()
             save_current_state(root)
             if "locked_files_treeview" in buttons_frame:
-                context_menu_manager.refresh_available_locked_files(
+                prune_locked_files_already_in_main(
                     buttons_frame["locked_files_treeview"],
                     files_listbox
                 )
@@ -339,8 +339,22 @@ def switch_to_patch_menu(root_widget=None) -> None:
         
         # Set the current menu
         state_manager.current_menu = "patch"
-    finally:
-        state_manager.set_loading(False)  # Always clear loading state
+
+        # Load locked files (+ status refresh) under busy dialog; clear loading when done
+        if "locked_files_treeview" in buttons_frame:
+            from busy_ops import load_create_patch_screen_busy
+
+            load_create_patch_screen_busy(
+                root_widget,
+                files_listbox,
+                buttons_frame["locked_files_treeview"],
+                on_done=lambda: state_manager.set_loading(False),
+            )
+        else:
+            state_manager.set_loading(False)
+    except Exception:
+        state_manager.set_loading(False)
+        raise
 
 
 def restore_patch_form_state(buttons_frame: dict, state: dict) -> None:
@@ -417,16 +431,28 @@ def switch_to_patches_menu(root_widget=None) -> None:
     if "patch_version_prefixe" in buttons_frame:
         buttons_frame["patch_version_prefixe"].set(selected_prefix)
     
-    # Refresh patches with the saved prefix
-    refresh_patches(patches_listbox, False, selected_prefix, username)
-    
-    # Restore selected patch if applicable
-    if patches_state.get("selected_patch"):
+    # Refresh patches with the saved prefix under a busy dialog
+    from busy_ops import load_patches_busy
+
+    selected_patch_name = patches_state.get("selected_patch")
+
+    def _after_patches_loaded():
+        if not selected_patch_name:
+            return
         for item_id in patches_listbox.get_children():
             patch_name = patches_listbox.item(item_id, "values")[0]
-            if patch_name == patches_state["selected_patch"]:
+            if patch_name == selected_patch_name:
                 patches_listbox.selection_set(item_id)
                 break
+
+    load_patches_busy(
+        root_widget,
+        patches_listbox,
+        False,
+        selected_prefix,
+        title="Loading patches",
+        on_done=_after_patches_loaded,
+    )
     
     # Set the current menu
     state_manager.current_menu = "patches"
@@ -502,6 +528,7 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
     root_widget.update_idletasks()
     
     # Restore state if available
+    load_patch_files = False
     if modify_patch_state.get("listbox_items"):
         for item in modify_patch_state["listbox_items"]:
             files_listbox.insert("", "end", values=item)
@@ -514,22 +541,12 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
         
         restore_patch_form_state(buttons_frame, modify_patch_state)
     else:
-        refresh_patch_files(files_listbox, patch_details)
+        load_patch_files = True
 
-    
-    refresh_file_status_version(files_listbox)
-    
-    # Update locked files treeview after layout is stable
-    if "locked_files_treeview" in buttons_frame:
-        root_widget.update()
-        context_menu_manager.refresh_available_locked_files(
-            buttons_frame["locked_files_treeview"],
-            files_listbox
-        )
-    
     # Create drag and drop callback
     def on_drop_with_state_preservation(event):
         from buttons_function import handle_drop
+        from file_transfer import prune_locked_files_already_in_main
         handle_drop(event, files_listbox)
         
         if state_manager.current_menu == "modify_patch":
@@ -537,7 +554,7 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
             save_current_state(root)
             
             if "locked_files_treeview" in buttons_frame:
-                context_menu_manager.refresh_available_locked_files(
+                prune_locked_files_already_in_main(
                     buttons_frame["locked_files_treeview"],
                     files_listbox
                 )
@@ -582,6 +599,17 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
     
     # Set menu state
     state_manager.current_menu = "modify_patch"
+
+    if "locked_files_treeview" in buttons_frame:
+        from busy_ops import load_modify_patch_screen_busy
+
+        load_modify_patch_screen_busy(
+            root_widget,
+            files_listbox,
+            buttons_frame["locked_files_treeview"],
+            patch_details,
+            load_patch_files=load_patch_files,
+        )
 
 
 def create_top_frame(
@@ -723,11 +751,12 @@ def save_file_listbox_state_to_manager(file_listbox, menu_name: str) -> None:
     """Save the state of a file listbox to the state manager"""
     selected_files = []
     listbox_items = []
-    
+    selected_ids = set(file_listbox.selection())
+
     for item_id in file_listbox.get_children():
         values = file_listbox.item(item_id, "values")
         listbox_items.append(values)
-        if item_id in file_listbox.selection():
+        if item_id in selected_ids:
             selected_files.append(values[2])  # File path is at index 2
     
     state_manager.save_state(menu_name, 

@@ -66,6 +66,13 @@ def next_version(application_id: str) -> Optional[str]:
     """
     try:
         db = dbClass()
+        if db.conn is None:
+            messagebox.showerror(
+                "Error",
+                "Database is not connected. Cannot calculate next version.",
+            )
+            return None
+
         max_version = db.get_max_version(application_id)
         if not max_version:
             messagebox.showerror("Error", "Failed to retrieve the max version")

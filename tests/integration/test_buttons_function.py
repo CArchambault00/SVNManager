@@ -23,17 +23,23 @@ def test_lock_unlock_selected_files(files_tree, monkeypatch):
 
     tree, a, b = files_tree
     tree.selection_set(a)
-    lock = MagicMock()
-    unlock = MagicMock()
-    monkeypatch.setattr(bf, "lock_files", lock)
-    monkeypatch.setattr(bf, "unlock_files", unlock)
+    lock_mock = MagicMock()
+    unlock_mock = MagicMock()
+
+    def fake_busy(parent, files, listbox, *, lock):
+        if lock:
+            lock_mock(files, listbox)
+        else:
+            unlock_mock(files, listbox)
+
+    monkeypatch.setattr("busy_ops.lock_unlock_busy", fake_busy)
 
     bf.lock_selected_files(tree)
-    lock.assert_called_once_with(["webpage/a.asp"], tree)
+    lock_mock.assert_called_once_with(["webpage/a.asp"], tree)
 
     tree.selection_set(a, b)
     bf.unlock_selected_files(tree)
-    unlock.assert_called_once_with(["webpage/a.asp", "webpage/b.asp"], tree)
+    unlock_mock.assert_called_once_with(["webpage/a.asp", "webpage/b.asp"], tree)
 
 
 def test_check_files_is_present(files_tree):
@@ -138,7 +144,12 @@ def test_remove_selected_patch(tk_root, mock_messagebox, monkeypatch):
 
     info = {"NAME": "S1.0.0001-W0", "PATCH_ID": 1}
     monkeypatch.setattr(bf, "get_full_patch_info", MagicMock(return_value=info))
-    monkeypatch.setattr("patches_operations.remove_patch", MagicMock(return_value=True))
+
+    def fake_remove(parent, patch_info, on_success=None):
+        if on_success:
+            on_success()
+
+    monkeypatch.setattr("busy_ops.remove_patch_busy", fake_remove)
 
     bf.remove_selected_patch(tree)
     assert tree.get_children() == ()
@@ -177,7 +188,6 @@ def test_handle_drop_adds_files(tk_root, tmp_appdata, sample_config, tmp_path, m
     dropped = page / "new.asp"
     dropped.write_text("hi", encoding="utf-8")
     wc_norm = str(wc.resolve()).replace("\\", "/")
-    dropped_norm = str(dropped.resolve()).replace("\\", "/")
 
     # Tk DnD paths are often brace-wrapped
     event = SimpleNamespace(data="{" + str(dropped.resolve()) + "}")
@@ -193,20 +203,23 @@ def test_handle_drop_adds_files(tk_root, tmp_appdata, sample_config, tmp_path, m
             return path[len(wc_norm) :].lstrip("/")
         return ""
 
-    monkeypatch.setattr(bf.subprocess, "run", run)
+    monkeypatch.setattr(
+        "busy_ops.run_with_busy_dialog",
+        lambda parent, title, work_fn, initial_status="Please wait...": work_fn(lambda _m: None),
+    )
+    monkeypatch.setattr("busy_ops.call_on_main_thread", lambda fn: fn())
+    monkeypatch.setattr("svn_operations.subprocess.run", run)
     monkeypatch.setattr("svn_operations.get_relative_path", rel)
     monkeypatch.setattr(
-        bf,
-        "load_config",
+        "config.load_config",
         MagicMock(return_value={"svn_path": str(wc.resolve()), "username": "tester"}),
     )
     monkeypatch.setattr(
-        bf,
-        "get_file_info_batch",
+        "svn_operations.get_file_info_batch",
         MagicMock(return_value={"webpage/new.asp": (True, "tester", "5", "2026-01-01")}),
     )
-    monkeypatch.setattr(bf.os.path, "isfile", lambda p: str(p).replace("\\", "/").endswith("new.asp"))
-    monkeypatch.setattr(bf.os.path, "isdir", lambda p: False)
+    monkeypatch.setattr("os.path.isfile", lambda p: str(p).replace("\\", "/").endswith("new.asp"))
+    monkeypatch.setattr("os.path.isdir", lambda p: False)
 
     bf.handle_drop(event, tree)
 

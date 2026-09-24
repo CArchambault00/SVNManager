@@ -26,14 +26,16 @@ def test_get_relative_path(mock_svn):
 
 def test_lock_files_success(tmp_appdata, sample_config, mock_svn, mock_messagebox, monkeypatch):
     listbox = MagicMock()
-    monkeypatch.setattr(svn, "refresh_locked_files", MagicMock())
+    monkeypatch.setattr(svn, "update_listbox_file_info", MagicMock())
     svn.lock_files(["webpage/a.asp"], listbox)
     mock_messagebox.showinfo.assert_called()
-    svn.refresh_locked_files.assert_called_once_with(listbox)
+    svn.update_listbox_file_info.assert_called_once_with(
+        listbox, paths=["webpage/a.asp"], remove_if_not_user_locked=False
+    )
 
 
 def test_lock_files_no_selection(tmp_appdata, sample_config, mock_svn, mock_messagebox, monkeypatch):
-    monkeypatch.setattr(svn, "refresh_locked_files", MagicMock())
+    monkeypatch.setattr(svn, "update_listbox_file_info", MagicMock())
     svn.lock_files([], MagicMock())
     mock_messagebox.showerror.assert_called()
 

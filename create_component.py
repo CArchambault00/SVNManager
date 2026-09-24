@@ -48,15 +48,13 @@ def add_scrollbars(widget: ttk.Treeview, parent: tk.Widget) -> None:
 
 def refresh_patches_from_menu(listbox):
     """Refresh patches from context menu"""
-    from config import load_config
-    config = load_config()
-    username = config.get("username")
-    # Get the active prefix (need to check parent widget)
+    from busy_ops import load_patches_busy
     from app import find_patch_prefix_combobox
+
     root = listbox.winfo_toplevel()
     prefix_combo = find_patch_prefix_combobox(root)
     prefix = prefix_combo.get() if prefix_combo else "S"
-    refresh_patches(listbox, False, prefix, username)
+    load_patches_busy(root, listbox, False, prefix)
 
 def remove_selected_items(listbox: ttk.Treeview) -> None:
     """Remove selected items from the listbox."""
@@ -213,42 +211,10 @@ def create_top_frame(
 
 def remove_and_return_selected_files(listbox):
     """Remove selected files from patch and return them to available locked files if they're locked by the user"""
-    from config import load_config
-    from svn_operations import get_file_info
-    
-    selected_items = listbox.selection()
-    if not selected_items:
-        return
-        
-    # Find the locked files treeview
+    from file_transfer import remove_and_return_selected_files as _remove_and_return
+
     locked_files_treeview = find_locked_files_treeview(listbox)
-    if not locked_files_treeview:
-        # Just remove the files if we can't find the locked files treeview
-        for item in selected_items:
-            listbox.delete(item)
-        return
-    
-    username = load_config().get("username", "")
-    
-    # Get existing files in locked_files_treeview to avoid duplicates
-    existing_locked_files = set()
-    for item in locked_files_treeview.get_children():
-        file_path = locked_files_treeview.item(item, "values")[2]
-        existing_locked_files.add(file_path)
-    
-    for item in selected_items:
-        values = listbox.item(item, "values")
-        file_path = values[2]
-        
-        # Check if file is locked by the current user
-        is_locked_by_user, lock_owner, revision, lock_date = get_file_info(file_path)
-        
-        # Add to locked files treeview if it's locked by current user and not already there
-        if is_locked_by_user and file_path not in existing_locked_files:
-            locked_files_treeview.insert("", "end", values=values)
-        
-        # Remove from main files treeview
-        listbox.delete(item)
+    _remove_and_return(listbox, locked_files_treeview)
 
 def refresh_available_locked_files_from_menu(listbox):
     """Refresh locked files from context menu"""

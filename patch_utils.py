@@ -4,10 +4,22 @@ import shutil
 import os
 import re
 import tempfile
-from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision, get_file_revision_batch, get_file_head_revision, get_file_head_revision_batch, get_relative_path
+from svn_operations import copy_InstallConfig, copy_RunScript, copy_UnderTestInstallConfig, get_file_revision, get_file_revision_batch, get_file_head_revision, get_file_head_revision_batch, get_relative_path, get_wc_root, scope_relative_path
 from db_handler import dbClass
 import time
 from config import log_error, load_config
+
+def _svn_scope_relative(svn_path):
+    """Configured svn_path relative to WC root; '' if at root or unresolvable."""
+    if not svn_path:
+        return ""
+    try:
+        return scope_relative_path(svn_path, get_wc_root(svn_path))
+    except Exception:
+        try:
+            return get_relative_path(svn_path)
+        except Exception:
+            return ""
 
 # Auto-generated / scaffolding files at the patch folder root — always rebuilt.
 GENERATED_PATCH_ROOT_FILES = frozenset({
@@ -34,13 +46,14 @@ def get_md5_checksum(file_path):
     except Exception as e:
         raise Exception(f"Error calculating MD5 checksum for {file_path}: {e}")
 
-def map_svn_file_to_patch_dest(file_path, svn_path=None):
+def map_svn_file_to_patch_dest(file_path, svn_path=None, scope_relative=None):
     """Map an SVN-relative path to its destination path inside the patch folder."""
     file_path_no_svn = file_path.replace("\\", "/")
     if svn_path:
-        rel = get_relative_path(svn_path)
-        if rel and file_path_no_svn.startswith(rel):
-            file_path_no_svn = file_path_no_svn.replace(rel, "", 1).lstrip("/")
+        if scope_relative is None:
+            scope_relative = _svn_scope_relative(svn_path)
+        if scope_relative and file_path_no_svn.startswith(scope_relative):
+            file_path_no_svn = file_path_no_svn.replace(scope_relative, "", 1).lstrip("/")
 
     if file_path_no_svn.startswith("webpage"):
         return file_path_no_svn.replace("webpage", "Web", 1)
@@ -66,11 +79,12 @@ def map_db_file_to_patch_dest(file_info):
 def get_managed_dest_paths(files, svn_path=None):
     """Return the set of relative destination paths managed by the patch build."""
     managed = set()
+    scope_relative = _svn_scope_relative(svn_path) if svn_path else None
     for file in files:
         if isinstance(file, dict):
             dest = map_db_file_to_patch_dest(file)
         else:
-            dest = map_svn_file_to_patch_dest(file, svn_path)
+            dest = map_svn_file_to_patch_dest(file, svn_path, scope_relative=scope_relative)
         if dest:
             managed.add(dest.replace("\\", "/"))
     return managed
@@ -204,60 +218,68 @@ def create_depend_txt(db_handler, patch_version_folder, patch_id):
     try:
         patch_files = db_handler.get_patch_file_list_new(patch_id)
         depend_content = set()  # Use a set to avoid duplicates
-        
-        for file_info in patch_files:
-            folder_path = ""
+        folder_cache = {}
+        app_id_cache = {}
 
+        for file_info in patch_files:
             folder_path = file_info['PATH'].replace(file_info['NAME'], "")
 
             file_name = file_info['NAME']
             current_version = file_info.get('VERSION')
             if current_version is None:
                 continue
-            # Get previous versions of this file from other patches
-            previous_versions = db_handler.get_folder_patch_list_new(folder_path)
-            # Filter for this specific file with versions < current version
+            if folder_path not in folder_cache:
+                folder_cache[folder_path] = db_handler.get_folder_patch_list_new(folder_path)
+            previous_versions = folder_cache[folder_path]
             for pv in previous_versions:
-                if (pv['NAME'] == file_name and 
-                    pv['DELETED_YN'] == 'N' and 
-                    pv.get('VERSION') is not None and 
+                if (pv['NAME'] == file_name and
+                    pv['DELETED_YN'] == 'N' and
+                    pv.get('VERSION') is not None and
                     current_version is not None and
                     float(pv['VERSION']) < float(current_version)):
-                    
-                    # Extract build number from patch name
-                    build_number = extract_build_number(pv['PATCH_NAME'])
+
+                    build_number = extract_build_number(
+                        pv['PATCH_NAME'],
+                        db=db_handler,
+                        app_id_cache=app_id_cache,
+                    )
                     if build_number != "'ERROR',3,0,0":
                         depend_content.add(build_number)
-        
+
         if depend_content:
             with open(os.path.join(patch_version_folder, "depend.txt"), 'w') as f:
                 f.write('\n'.join(sorted(depend_content)))
-                
+
     except Exception as e:
         raise Exception(f"Error creating depend.txt: {e}")
 
-def extract_build_number(patch_name):
+def extract_build_number(patch_name, db=None, app_id_cache=None):
     """
     Replicates the ExtractBuildNumber function from VB6 code.
     Converts patch names like "J2.1.1234" to "'CORE',2,1,1234"
     """
-    db = dbClass()
+    if db is None:
+        db = dbClass()
+    if app_id_cache is None:
+        app_id_cache = {}
     try:
         if not patch_name:
             return "'ERROR',0,0,0"
-        
+
         # Remove any suffix after hyphen
         if '-' in patch_name:
             patch_name = patch_name.split('-')[0]
-        
+
         # Determine application code
         prefix = patch_name[0].upper()
-        application_id = db.get_application_id(prefix)
+        if prefix not in app_id_cache:
+            app_id_cache[prefix] = db.get_application_id(prefix)
+        application_id = app_id_cache[prefix]
         version_part = patch_name[1:]
 
         # Split version components
         version_parts = version_part.split('.')
-        
+
         if len(version_parts) == 1:
             # Only major version
             major = version_parts[0]
@@ -273,11 +295,11 @@ def extract_build_number(patch_name):
             major = version_parts[0]
             minor = version_parts[1]
             revision = '.'.join(version_parts[2:])  # In case revision has dots
-        
+
         # Clean up revision if it has prefixes
         if revision and not revision[-1].isdigit():
             revision = revision[:-1]
-        
+
         return f"'{application_id}',{major},{minor},{revision}"
     except Exception as e:
         raise Exception(f"Error extracting build number from {patch_name}: {e}")
@@ -323,19 +345,24 @@ def create_readme_file(patch_version_folder, patch_name, username, creation_date
         webpage_files = []
         database_files = []
         svn_path = load_config().get("svn_path", "")
+        scope_relative = _svn_scope_relative(svn_path) if svn_path else ""
+
+        string_files = [f for f in files if not isinstance(f, dict)]
+        revisions = get_file_head_revision_batch(string_files) if string_files else {}
+
         for file in files:
             if isinstance(file, dict):
                 # Files from database already have their versions
                 if file["FOLDER_TYPE"] == '1':
-                    webpage_files.append(f"{file["PATH"]} ({file['VERSION']})")
+                    webpage_files.append(f"{file['PATH']} ({file['VERSION']})")
                 else:
-                    database_files.append(f"{file["PATH"]} ({file['VERSION']})")
+                    database_files.append(f"{file['PATH']} ({file['VERSION']})")
             else:
-                revision = get_file_head_revision(file)
+                revision = revisions.get(file, "")
                 filePathWithoutProjects = file
 
-                if get_relative_path(svn_path) != "" and filePathWithoutProjects.startswith(get_relative_path(svn_path)):
-                    filePathWithoutProjects = filePathWithoutProjects.replace(get_relative_path(svn_path), "")[1:]
+                if scope_relative and filePathWithoutProjects.startswith(scope_relative):
+                    filePathWithoutProjects = filePathWithoutProjects.replace(scope_relative, "", 1).lstrip("/")
 
                 if filePathWithoutProjects.startswith("webpage"):
                     webpage_files.append(f"{file} ({revision})")
@@ -372,6 +399,7 @@ def create_main_sql_file(patch_version_folder, files, patch_name=None, version_i
         schema_files = {}
 
         svn_path = load_config().get("svn_path", "")
+        scope_relative = _svn_scope_relative(svn_path) if svn_path else ""
 
         # Process and organize files by schema
         for file in files:
@@ -380,8 +408,8 @@ def create_main_sql_file(patch_version_folder, files, patch_name=None, version_i
                 filePathWithoutProjects = filePathWithoutProjects.replace(file["SVN_PATH"], "")
             elif isinstance(file, str):
                 filePathWithoutProjects = file
-                if get_relative_path(svn_path) != "" and isinstance(filePathWithoutProjects, str) and filePathWithoutProjects.startswith(get_relative_path(svn_path)):
-                    filePathWithoutProjects = filePathWithoutProjects.replace(get_relative_path(svn_path), "")[1:]
+                if scope_relative and isinstance(filePathWithoutProjects, str) and filePathWithoutProjects.startswith(scope_relative):
+                    filePathWithoutProjects = filePathWithoutProjects.replace(scope_relative, "", 1).lstrip("/")
             
 
             if isinstance(file, dict) and file["FOLDER_TYPE"] == '2':
@@ -530,12 +558,13 @@ def create_patch_files_batch(files, svn_path, patch_version_folder):
     """Create patch files in batches with proper error handling."""
     web_files = []
     db_files = []
-    
+    scope_relative = _svn_scope_relative(svn_path) if svn_path else ""
+
     # First, categorize files
     for file in files:
         file_path_no_svn = file
-        if get_relative_path(svn_path) != "" and file_path_no_svn.startswith(get_relative_path(svn_path)):
-            file_path_no_svn = file_path_no_svn.replace(get_relative_path(svn_path), "")[1:]
+        if scope_relative and file_path_no_svn.startswith(scope_relative):
+            file_path_no_svn = file_path_no_svn.replace(scope_relative, "", 1).lstrip("/")
         if file_path_no_svn.startswith("webpage"):
             web_files.append((
                 file_path_no_svn,

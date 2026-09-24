@@ -25,18 +25,6 @@ class DatabaseConnection:
     
     def __init__(self):
         self._conn: Optional[oracledb.Connection] = None
-        self._initialize_client()
-        
-    def _initialize_client(self) -> None:
-        """Initialize Oracle client libraries."""
-        try:
-            base_path = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.abspath(".")
-            client_path = os.path.join(base_path, "instantclient_12_1")
-            oracledb.init_oracle_client(lib_dir=client_path)
-        except Exception as e:
-            print(f"Failed to initialize Oracle client: {e}")
-            log_error(f"Failed to initialize Oracle client: {e}")
-            raise DatabaseError(f"Oracle client initialization failed: {e}")
 
     @property
     def conn(self) -> oracledb.Connection:
@@ -49,10 +37,10 @@ class DatabaseConnection:
         """Establish database connection using configuration."""
         config = load_config()
         try:
-            self._conn = oracledb.connect(
-                user='DEV_TOOL',
-                password='DEV_TOOL',
-                dsn=config.get("dsn_name", "CYFRAMEPROD")
+            self._conn = _connect_oracle(
+                user="DEV_TOOL",
+                password="DEV_TOOL",
+                dsn=config.get("dsn_name", "CYFRAMEPROD"),
             )
         except oracledb.Error as e:
             error_msg = f"Database connection failed: {e}"
@@ -69,53 +57,118 @@ class DatabaseConnection:
             finally:
                 self._conn = None
 
+
+def _oracle_base_path() -> str:
+    if getattr(sys, "frozen", False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _instant_client_folders():
+    """Instant Client dirs to try, newest first. 12.1 only with oracledb < 3."""
+    folders = [
+        "instantclient_21_1",
+        "instantclient_19_28",
+        "instantclient_19_1",
+    ]
+    try:
+        major = int(oracledb.__version__.split(".")[0])
+    except Exception:
+        major = 2
+    # oracledb 3+/4+ thick mode requires Instant Client 19.1+
+    if major < 3:
+        folders.append("instantclient_12_1")
+    return folders
+
+
+def _find_instant_client(base_path: Optional[str] = None) -> Optional[str]:
+    base = base_path or _oracle_base_path()
+    for folder in _instant_client_folders():
+        candidate = os.path.join(base, folder)
+        if os.path.isdir(candidate):
+            return candidate
+    return None
+
+
+def _connect_oracle(user: str, password: str, dsn: str):
+    """
+    Connect to Oracle.
+
+    Prefer thick mode when Instant Client is present — needed for older password
+    verifiers (DPY-3015 in thin mode). Fall back to thin if thick is unavailable.
+    """
+    errors = []
+    client_path = _find_instant_client()
+
+    if client_path:
+        try:
+            try:
+                oracledb.init_oracle_client(lib_dir=client_path)
+            except Exception as init_err:
+                # Already initialized in this process is fine
+                if "already been initialized" not in str(init_err).lower():
+                    raise
+            return oracledb.connect(user=user, password=password, dsn=dsn)
+        except Exception as e:
+            errors.append(f"thick ({client_path}): {e}")
+
+    try:
+        return oracledb.connect(user=user, password=password, dsn=dsn)
+    except oracledb.Error as e:
+        errors.append(f"thin: {e}")
+        detail = " | ".join(errors) if errors else str(e)
+        raise oracledb.Error(detail) from e
+
+
 class dbClass:
     def __init__(self):
         self.conn = None
         self.connect()
 
     def connect(self):
-        instantclient_path = None
-        config = load_config()
-        try:
-             # Detect if running inside compiled .exe
-            if getattr(sys, 'frozen', False):
-                # Running from PyInstaller bundle
-                base_path = sys._MEIPASS
-            else:
-                # Running from source
-                base_path = os.path.dirname(os.path.abspath(__file__))
+        """
+        Connect via Instant Client thick mode when available (supports older
+        DB password verifiers). Falls back to thin mode otherwise.
 
-            instantclient_path = os.path.join(base_path, "instantclient_12_1")
-            
-            oracledb.init_oracle_client(lib_dir=instantclient_path)
-            self.conn = oracledb.connect(user='DEV_TOOL', password='DEV_TOOL', dsn=config.get("dsn_name", "CYFRAMEPROD"))
+        Requires oracledb 2.x for Instant Client 12.1 (see requirements.txt).
+        """
+        config = load_config()
+        dsn = config.get("dsn_name", "CYFRAMEPROD")
+        instantclient_path = _find_instant_client()
+
+        try:
+            self.conn = _connect_oracle(
+                user="DEV_TOOL",
+                password="DEV_TOOL",
+                dsn=dsn,
+            )
         except oracledb.Error as e:
-            messagebox.showerror("Database Error", f"Failed to connect to the database, Application will not work properly\n{e}")
+            self.conn = None
+            tns_admin = os.environ.get("TNS_ADMIN", "(not set)")
+            messagebox.showerror(
+                "Database Error",
+                f"Failed to connect to the database. Application will not work properly.\n{e}",
+            )
             log_error(f"Database Error: {e}")
             log_error(f"Date: {datetime.now()}")
             log_error(f"Instant Client Path: {instantclient_path}\n")
-            log_error(f"TNS_ADMIN: {os.environ['TNS_ADMIN']}\n")
+            log_error(f"TNS_ADMIN: {tns_admin}\n")
+            log_error(f"oracledb: {oracledb.__version__}\n")
             log_error(f"------------------------------")
-
-        # config = load_config()
-        # hostname = config.get("db_host", "db04.intranet.cyframe.com")
-        # port = config.get("db_port", "1521")
-        # service_name = config.get("db_service", "CYFRAMEPROD")
-
-        # dsn = f"{hostname}:{port}/{service_name}"
-
-        # self.conn = oracledb.connect(
-        #     user=config.get("db_user", "DEV_TOOL"),
-        #     password=config.get("db_password", "DEV_TOOL"),
-        #     dsn=dsn
-        # )
 
     def close(self):
         if self.conn:
             self.conn.close()
+            self.conn = None
+
+    def _require_connection(self):
+        if self.conn is None:
+            raise DatabaseError(
+                "Not connected to the database. Check Oracle connectivity / TNS_ADMIN."
+            )
 
     def execute_query(self, sql: str, params: Optional[Dict] = None) -> List[Dict]:
+        self._require_connection()
         cursor = self.conn.cursor()
         cursor.execute(sql, params or {})
         columns = [col[0] for col in cursor.description]
@@ -124,6 +177,7 @@ class dbClass:
         return results
 
     def execute_non_query(self, sql: str, params: Optional[Dict] = None):
+        self._require_connection()
         cursor = self.conn.cursor()
         cursor.execute(sql, params or {})
         cursor.close()

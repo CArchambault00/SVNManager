@@ -139,7 +139,9 @@ def test_view_files_from_patch(tmp_appdata, sample_config, mock_db, mock_message
             "PATCH_NAME": "S1.0.0400-W0",
         }
     ]
-    monkeypatch.setattr(po, "get_file_info", MagicMock(return_value=(True, "tester", "7", "2026-01-01")))
+    monkeypatch.setattr(po, "get_file_info_batch", MagicMock(return_value={
+        "webpage/a.asp": (True, "tester", "7", "2026-01-01"),
+    }))
     display = MagicMock()
     monkeypatch.setattr(po, "display_patch_files", display)
 

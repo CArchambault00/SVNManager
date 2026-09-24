@@ -44,7 +44,7 @@ def test_map_svn_file_to_patch_dest_unknown():
 
 
 def test_map_svn_file_strips_relative_prefix():
-    with patch("patch_utils.get_relative_path", return_value="Projects/SVN"):
+    with patch("patch_utils._svn_scope_relative", return_value="Projects/SVN"):
         dest = map_svn_file_to_patch_dest(
             "Projects/SVN/webpage/a.asp", svn_path="C:/svn/Projects/SVN"
         )

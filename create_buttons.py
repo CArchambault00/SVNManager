@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from busy_dialog import run_with_busy_dialog
 from patch_generation import generate_patch
 from buttons_function import insert_next_version, deselect_all_rows, select_all_rows
 from patches_operations import refresh_patches, update_patch
@@ -10,6 +11,15 @@ from profiles import get_profile
 from create_component import LISTBOX_COLUMNS, apply_sortable_columns
 from text_widget_utils import ensure_text_widget_visible
 from context_menu import context_menu_manager
+
+def _refresh_locked_with_busy(locked_files_treeview, files_listbox):
+    from busy_ops import load_locked_files_busy
+
+    load_locked_files_busy(
+        locked_files_treeview.winfo_toplevel(),
+        locked_files_treeview,
+        exclude_treeview=files_listbox,
+    )
 
 def add_scrollbars(widget: ttk.Treeview, parent: tk.Widget) -> None:
     """
@@ -107,16 +117,24 @@ def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_s
     unlock_files_checkbox.pack(side="left", padx=5, pady=5)
 
     # Generate patch button
+    def on_generate_patch():
+        files = [files_listbox.item(item, "values")[2] for item in files_listbox.get_children()]
+        prefix = patch_version_prefixe.get()
+        version = patch_version_entry.get()
+        description = patch_description_entry.get("1.0", tk.END).strip()
+        unlock = unlock_files.get()
+        root = files_listbox.winfo_toplevel()
+
+        def work(set_status):
+            set_status("Generating patch…")
+            generate_patch(files, prefix, version, description, unlock, status_callback=set_status)
+
+        run_with_busy_dialog(root, "Generating patch", work, initial_status="Starting…")
+
     generate_btn = tk.Button(
         right_panel, 
         text="Generate patch", 
-        command=lambda: generate_patch(
-            [files_listbox.item(item, "values")[2] for item in files_listbox.get_children()],  # All files, not just selected
-            patch_version_prefixe.get(), 
-            patch_version_entry.get(), 
-            patch_description_entry.get("1.0", tk.END).strip(), 
-            unlock_files.get()
-        ),
+        command=on_generate_patch,
         background="#FF8080"
     )
     generate_btn.pack(side="right", padx=5, pady=5)
@@ -155,7 +173,7 @@ def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_s
     refresh_button = tk.Button(
         locked_files_frame, 
         text="Refresh Locked Files", 
-        command=lambda: context_menu_manager.refresh_available_locked_files(locked_files_treeview, files_listbox),
+        command=lambda: _refresh_locked_with_busy(locked_files_treeview, files_listbox),
         background="#80DDFF"
     )
     refresh_button.pack(side="bottom", pady=5)
@@ -237,18 +255,51 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     unlock_files_checkbox.pack(side="left", padx=5, pady=5)
 
     # Update patch button
+    def on_update_patch():
+        files = [files_listbox.item(item, "values")[2] for item in files_listbox.get_children()]
+        patch_id = patch_details["PATCH_ID"]
+        prefix = patch_version_prefixe.get()
+        version = patch_version_entry.get()
+        description = patch_description_entry.get("1.0", tk.END).strip()
+        unlock = unlock_files.get()
+        root = files_listbox.winfo_toplevel()
+        # Defer remount until after this busy dialog closes so nested loads
+        # get their own busy session instead of running inline on the main thread.
+        pending = {}
+
+        def switch(info):
+            pending["info"] = info
+
+        def work(set_status):
+            set_status("Updating patch…")
+            update_patch(
+                files,
+                patch_id,
+                prefix,
+                version,
+                description,
+                switch,
+                unlock,
+                status_callback=set_status,
+            )
+
+        def after_update():
+            info = pending.get("info")
+            if info is not None:
+                switch_to_modify_patch_menu(info)
+
+        run_with_busy_dialog(
+            root,
+            "Updating patch",
+            work,
+            initial_status="Starting…",
+            on_complete=after_update,
+        )
+
     update_btn = tk.Button(
         right_panel, 
         text="Update Patch", 
-        command=lambda: update_patch(
-            [files_listbox.item(item, "values")[2] for item in files_listbox.get_children()],  # All files, not just selected
-            patch_details["PATCH_ID"], 
-            patch_version_prefixe.get(), 
-            patch_version_entry.get(), 
-            patch_description_entry.get("1.0", tk.END).strip(), 
-            switch_to_modify_patch_menu, 
-            unlock_files.get()
-        ), 
+        command=on_update_patch, 
         background="#FF8080"
     )
     update_btn.pack(side="right", padx=5, pady=5)
@@ -283,7 +334,7 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     refresh_button = tk.Button(
         locked_files_frame, 
         text="Refresh Locked Files", 
-        command=lambda: context_menu_manager.refresh_available_locked_files(locked_files_treeview, files_listbox),
+        command=lambda: _refresh_locked_with_busy(locked_files_treeview, files_listbox),
         background="#80DDFF"
     )
     refresh_button.pack(side="bottom", pady=5)
@@ -312,7 +363,17 @@ def create_button_frame_patches(parent, patches_listbox, switch_to_modify_patch_
     patch_version_prefixe.pack(side="left", padx=5)
     username = config.get("username")
     # On patch version change, refresh the patches
-    patch_version_prefixe.bind("<<ComboboxSelected>>", lambda event: refresh_patches(patches_listbox, False, patch_version_prefixe.get(), username))
+    def _on_prefix_selected(_event):
+        from busy_ops import load_patches_busy
+
+        load_patches_busy(
+            patches_listbox.winfo_toplevel(),
+            patches_listbox,
+            False,
+            patch_version_prefixe.get(),
+        )
+
+    patch_version_prefixe.bind("<<ComboboxSelected>>", _on_prefix_selected)
 
     # Return widget references for state management
     return {

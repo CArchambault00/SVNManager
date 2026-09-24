@@ -61,7 +61,7 @@ def test_remove_patch_confirmed(seeded_patch, mock_db, mock_messagebox):
 def test_remove_patch_cancelled(seeded_patch, mock_db, mock_messagebox):
     mock_messagebox.askyesno.return_value = False
     result = po.remove_patch(seeded_patch)
-    assert result is None
+    assert result is False
     assert seeded_patch["PATCH_ID"] in mock_db.patches
 
 
@@ -84,8 +84,9 @@ def test_update_patch(seeded_patch, sample_config, mock_db, mock_messagebox, mon
     mock_db.update_patch_header = MagicMock()
 
     monkeypatch.setattr(po, "commit_files", MagicMock())
-    monkeypatch.setattr(po, "get_file_head_revision", MagicMock(return_value="99"))
-    monkeypatch.setattr(po, "get_md5_checksum", MagicMock(return_value="deadbeef"))
+    monkeypatch.setattr(po, "get_file_head_revision_batch", MagicMock(return_value={"webpage/pages/a.asp": "99"}))
+    monkeypatch.setattr(po, "get_md5_checksum_batch", MagicMock(return_value={"C:/svn/wc/webpage/pages/a.asp": "deadbeef"}))
+    monkeypatch.setattr(po, "get_wc_root", MagicMock(return_value="C:/svn/wc"))
     monkeypatch.setattr(po, "create_patch_files_batch", MagicMock())
     monkeypatch.setattr(po, "setup_patch_folder", MagicMock())
     monkeypatch.setattr(po, "create_depend_txt", MagicMock())

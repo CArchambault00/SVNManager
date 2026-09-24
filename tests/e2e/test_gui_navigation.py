@@ -19,6 +19,16 @@ def gui_app(tk_root, tmp_appdata, sample_config, mock_db, mock_svn, mock_message
     monkeypatch.setattr("svn_operations.get_all_locked_files", MagicMock(return_value=[]))
     monkeypatch.setattr("buttons_function.insert_next_version", MagicMock())
 
+    def _noop_busy(*args, on_done=None, **kwargs):
+        if on_done:
+            on_done()
+
+    monkeypatch.setattr("busy_ops.load_locked_files_busy", _noop_busy)
+    monkeypatch.setattr("busy_ops.load_create_patch_screen_busy", _noop_busy)
+    monkeypatch.setattr("busy_ops.load_modify_patch_screen_busy", _noop_busy)
+    monkeypatch.setattr("busy_ops.load_patches_busy", _noop_busy)
+    monkeypatch.setattr("busy_ops.load_patch_files_busy", _noop_busy)
+
     # Avoid iconbitmap failures in some environments
     monkeypatch.setattr(tk_root, "iconbitmap", MagicMock())
 

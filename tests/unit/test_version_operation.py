@@ -63,3 +63,13 @@ def test_next_version_returns_none_when_db_empty(mock_messagebox):
     with patch("version_operation.dbClass", return_value=fake):
         assert next_version("CORE") is None
     mock_messagebox.showerror.assert_called()
+
+
+def test_next_version_returns_none_when_disconnected(mock_messagebox):
+    fake = MagicMock()
+    fake.conn = None
+
+    with patch("version_operation.dbClass", return_value=fake):
+        assert next_version("CORE") is None
+    mock_messagebox.showerror.assert_called()
+    fake.get_max_version.assert_not_called()

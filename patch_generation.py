@@ -1,5 +1,5 @@
 import os
-from svn_operations import commit_files, get_file_head_revision_batch, get_relative_path
+from svn_operations import commit_files, get_file_head_revision_batch, get_wc_root
 from tkinter import messagebox
 import time
 import datetime as date
@@ -7,10 +7,14 @@ import version_operation as vo
 from db_handler import dbClass
 from patch_utils import get_md5_checksum_batch, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files_batch
 from config import load_config, verify_config, log_error, log_success
-import subprocess
 
-def generate_patch(selected_files, patch_prefixe, patch_version, patch_description, unlock_files):
+def generate_patch(selected_files, patch_prefixe, patch_version, patch_description, unlock_files, status_callback=None):
+    def status(msg):
+        if status_callback:
+            status_callback(msg)
+
     db = dbClass()
+    patch_version_folder = None
 
     try:
         verify_config()
@@ -65,13 +69,11 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
 
         os.makedirs(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), exist_ok=True)
 
-        # Commit files in batches
-        BATCH_SIZE = 50
-        for i in range(0, len(selected_files), BATCH_SIZE):
-            batch = selected_files[i:i + BATCH_SIZE]
-            commit_files(batch, unlock_files)
+        status(f"Committing {len(selected_files)} file(s) to SVN…")
+        commit_files(selected_files, unlock_files)
         
         
+        status("Creating patch header…")
         patch_id = db.create_patch_header(patch_prefixe, patch_version, patch_description, username, 
                                         False, parsed_version.major, parsed_version.minor, parsed_version.revision)
         
@@ -79,17 +81,15 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         
         application_id = db.get_application_id(patch_prefixe)
 
-        wc_root = subprocess.run(
-            ["svn", "info", "--show-item", "wc-root", svn_path],
-            capture_output=True,
-            text=True,
-            shell=False,
-            creationflags=subprocess.CREATE_NO_WINDOW
-        ).stdout.strip().replace("\\", "/")
+        wc_root = get_wc_root(svn_path)
 
         # Process files in batches for better performance
+        BATCH_SIZE = 50
+        folder_id_cache = {}
+        total = len(selected_files)
         for i in range(0, len(selected_files), BATCH_SIZE):
             batch = selected_files[i:i + BATCH_SIZE]
+            status(f"Recording file details ({min(i + BATCH_SIZE, total)}/{total})…")
             
             # Get file HEAD revisions in batch
             revisions = get_file_head_revision_batch(batch)
@@ -108,17 +108,20 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
                     soft_path = "/".join(parts[:4])
                 else:
                     soft_path = "/".join(parts[:1])
-                # Get relative folder which is 
-                folder_id = db.get_folder_id(soft_path)
+                if soft_path not in folder_id_cache:
+                    folder_id_cache[soft_path] = db.get_folder_id(soft_path)
+                folder_id = folder_id_cache[soft_path]
                 file_id = db.create_patch_detail(patch_id, fake_path, clean_path, filename, revisions.get(file, ""), folder_id)
                 md5checksum = md5_checksums.get(f"{wc_root}/{file}")
                 if md5checksum:
                     db.set_md5(patch_id, file_id, md5checksum)
 
         # Create patch files in optimized batches
+        status("Copying files into patch folder…")
         create_patch_files_batch(selected_files, svn_path, patch_version_folder)
         
         # Create supporting files
+        status("Writing ReadMe / MainSQL / depend…")
         create_readme_file(patch_version_folder, patch_name, username, 
                          time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)
         
@@ -127,13 +130,19 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         setup_patch_folder(patch_version_folder)
         create_depend_txt(db, patch_version_folder, patch_id)
         
+        status("Finalizing…")
         db.conn.commit()
         success_details = f"Patch: {patch_name}\nFiles: {len(selected_files)}\nDescription: {patch_description}"
         log_success("Patch Creation", success_details)
         messagebox.showinfo("Info", "Patch created successfully!")
     except Exception as e:
-        db.conn.rollback()
-        cleanup_files(patch_version_folder)
+        try:
+            if db.conn is not None:
+                db.conn.rollback()
+        except Exception:
+            pass
+        if patch_version_folder:
+            cleanup_files(patch_version_folder)
         error_msg = f"Failed to create patch: {str(e)}"
         print(error_msg)
         log_error(error_msg, include_stack=True)

@@ -1,8 +1,16 @@
 import tkinter as tk
 from tkinter import messagebox
+from busy_dialog import run_with_busy_dialog, call_on_main_thread
+from busy_ops import (
+    load_locked_files_busy,
+    load_patches_busy,
+    lock_unlock_busy,
+    refresh_file_status_busy,
+    remove_patch_busy,
+)
 from svn_operations import (
     lock_files, unlock_files, refresh_file_status_version,
-    view_file_native_diff, get_all_locked_files, get_file_info, refresh_locked_files
+    view_file_native_diff, get_all_locked_files, refresh_locked_files
 )
 from patches_operations import (
     refresh_patches, remove_patch, view_files_from_patch,
@@ -10,6 +18,7 @@ from patches_operations import (
 )
 from config import load_config, log_error
 from buttons_function import next_version, view_selected_file_native_diff, open_file_location
+from file_transfer import remove_and_return_selected_files, prune_locked_files_already_in_main
 
 class ContextMenuManager:
     """Manages context menus for different UI sections."""
@@ -45,9 +54,9 @@ class ContextMenuManager:
             if has_selection:
                 if menu_name == "lock_unlock":
                     menu.add_command(label="Refresh Files", 
-                                command=lambda: refresh_file_status_version(listbox))
+                                command=lambda: refresh_file_status_busy(listbox.winfo_toplevel(), listbox))
                     menu.add_command(label="Refresh Locked files", 
-                                command=lambda: refresh_locked_files(listbox))
+                                command=lambda: self._refresh_locked_busy(listbox))
                     menu.add_separator()
                     menu.add_command(label="Open file location",
                                    command=lambda: open_file_location(listbox))
@@ -57,17 +66,37 @@ class ContextMenuManager:
                                 command=lambda: self._remove_from_patch(listbox))
                     menu.add_separator()
                     menu.add_command(label="Lock selected files", 
-                                   command=lambda: lock_files([listbox.item(item, "values")[2] for item in listbox.selection()], listbox))
+                                   command=lambda: lock_unlock_busy(
+                                       listbox.winfo_toplevel(),
+                                       [listbox.item(item, "values")[2] for item in listbox.selection()],
+                                       listbox,
+                                       lock=True,
+                                   ))
                     menu.add_command(label="Lock all Files", 
-                                   command=lambda: lock_files([listbox.item(item, "values")[2] for item in listbox.get_children()], listbox))
+                                   command=lambda: lock_unlock_busy(
+                                       listbox.winfo_toplevel(),
+                                       [listbox.item(item, "values")[2] for item in listbox.get_children()],
+                                       listbox,
+                                       lock=True,
+                                   ))
                     menu.add_separator()
                     menu.add_command(label="Unlock selected files", 
-                                   command=lambda: unlock_files([listbox.item(item, "values")[2] for item in listbox.selection()], listbox))
+                                   command=lambda: lock_unlock_busy(
+                                       listbox.winfo_toplevel(),
+                                       [listbox.item(item, "values")[2] for item in listbox.selection()],
+                                       listbox,
+                                       lock=False,
+                                   ))
                     menu.add_command(label="Unlock all Files", 
-                                   command=lambda: unlock_files([listbox.item(item, "values")[2] for item in listbox.get_children()], listbox))
+                                   command=lambda: lock_unlock_busy(
+                                       listbox.winfo_toplevel(),
+                                       [listbox.item(item, "values")[2] for item in listbox.get_children()],
+                                       listbox,
+                                       lock=False,
+                                   ))
                 if menu_name == "patch_files":
                     menu.add_command(label="Refresh Files", 
-                            command=lambda: refresh_file_status_version(listbox))
+                            command=lambda: refresh_file_status_busy(listbox.winfo_toplevel(), listbox))
                     menu.add_separator()
                     menu.add_command(label="Remove selected files", 
                                 command=lambda: self._remove_from_patch(listbox))
@@ -78,9 +107,9 @@ class ContextMenuManager:
                                    command=lambda: view_selected_file_native_diff(listbox))
                 if menu_name == "locked_files":
                     menu.add_command(label="Refresh Files", 
-                            command=lambda: refresh_file_status_version(listbox))
+                            command=lambda: refresh_file_status_busy(listbox.winfo_toplevel(), listbox))
                     menu.add_command(label="Refresh Locked files", 
-                                command=lambda: refresh_locked_files(listbox))
+                                command=lambda: self._refresh_locked_busy(listbox))
                     menu.add_separator()
                     menu.add_command(label="Add to Patch",
                                    command=lambda: self._add_to_main_treeview(listbox))
@@ -93,23 +122,33 @@ class ContextMenuManager:
                 if menu_name == "lock_unlock":
                     
                     menu.add_command(label="Refresh Files", 
-                                command=lambda: refresh_file_status_version(listbox))
+                                command=lambda: refresh_file_status_busy(listbox.winfo_toplevel(), listbox))
                     menu.add_command(label="Refresh Locked files", 
-                                command=lambda: refresh_locked_files(listbox))
+                                command=lambda: self._refresh_locked_busy(listbox))
                     menu.add_separator()
                     menu.add_command(label="Lock all Files", 
-                                   command=lambda: lock_files([listbox.item(item, "values")[2] for item in listbox.get_children()], listbox))
+                                   command=lambda: lock_unlock_busy(
+                                       listbox.winfo_toplevel(),
+                                       [listbox.item(item, "values")[2] for item in listbox.get_children()],
+                                       listbox,
+                                       lock=True,
+                                   ))
                     menu.add_separator()
                     menu.add_command(label="Unlock all Files", 
-                                   command=lambda: unlock_files([listbox.item(item, "values")[2] for item in listbox.get_children()], listbox))
+                                   command=lambda: lock_unlock_busy(
+                                       listbox.winfo_toplevel(),
+                                       [listbox.item(item, "values")[2] for item in listbox.get_children()],
+                                       listbox,
+                                       lock=False,
+                                   ))
                 if menu_name == "patch_files":
                     menu.add_command(label="Refresh Files", 
-                            command=lambda: refresh_file_status_version(listbox))
+                            command=lambda: refresh_file_status_busy(listbox.winfo_toplevel(), listbox))
                 if menu_name == "locked_files":
                     menu.add_command(label="Refresh Files", 
-                            command=lambda: refresh_file_status_version(listbox))
+                            command=lambda: refresh_file_status_busy(listbox.winfo_toplevel(), listbox))
                     menu.add_command(label="Refresh Locked files", 
-                                command=lambda: refresh_locked_files(listbox))
+                                command=lambda: self._refresh_locked_busy(listbox))
             
             menu.post(event.x_root, event.y_root)
             
@@ -152,37 +191,7 @@ class ContextMenuManager:
     def _remove_from_patch(self, listbox):
         """Remove selected files and optionally return to locked files view."""
         locked_files_treeview = self._find_locked_files_treeview(listbox)
-        selected_items = listbox.selection()
-        if not selected_items:
-            return
-            
-        # If no locked files treeview found, just remove the files
-        if not locked_files_treeview:
-            for item in selected_items:
-                listbox.delete(item)
-            return
-        
-        # Get config for username check
-        config = load_config()
-        username = config.get("username", "")
-        
-        # Get existing files in locked_files_treeview
-        existing_files = set()
-        for item in locked_files_treeview.get_children():
-            file_path = locked_files_treeview.item(item, "values")[2]
-            existing_files.add(file_path)
-        
-        # Process each selected file
-        for item in selected_items:
-            values = listbox.item(item, "values")
-            file_path = values[2]
-            
-            is_locked_by_user, _, _, _ = get_file_info(file_path)
-            
-            if is_locked_by_user and file_path not in existing_files:
-                locked_files_treeview.insert("", "end", values=values)
-            
-            listbox.delete(item)
+        remove_and_return_selected_files(listbox, locked_files_treeview)
 
     def _add_to_main_treeview(self, locked_files_treeview):
         """Add selected files to the main treeview."""
@@ -236,6 +245,16 @@ class ContextMenuManager:
             else:
                 messagebox.showerror("Error", f"Could not find details for patch {patch_name}")
 
+    def _refresh_locked_busy(self, listbox):
+        """Refresh locked-files list without freezing the UI."""
+        main = self._find_main_treeview(listbox)
+        load_locked_files_busy(
+            listbox.winfo_toplevel(),
+            listbox,
+            exclude_treeview=main,
+            tags=("unchecked",) if main is None else (),
+        )
+
     def _build_patch(self, treeview):
         """Build selected patch."""
         selected = treeview.selection()
@@ -244,7 +263,13 @@ class ContextMenuManager:
             # Get full patch info using the patch name (first value)
             full_patch_info = get_full_patch_info(patch_values[0])
             if full_patch_info:
-                build_patch(full_patch_info)
+                root = treeview.winfo_toplevel()
+
+                def work(set_status):
+                    set_status(f"Building patch {full_patch_info.get('NAME', '')}…")
+                    build_patch(full_patch_info)
+
+                run_with_busy_dialog(root, "Building patch", work, initial_status="Preparing…")
             else:
                 messagebox.showerror("Error", f"Could not find details for patch {patch_values[0]}")
 
@@ -256,7 +281,13 @@ class ContextMenuManager:
             # Get full patch info using the patch name (first value)
             full_patch_info = get_full_patch_info(patch_values[0])
             if full_patch_info:
-                view_files_from_patch(full_patch_info)
+                root = treeview.winfo_toplevel()
+
+                def work(set_status):
+                    set_status("Loading patch files…")
+                    view_files_from_patch(full_patch_info)
+
+                run_with_busy_dialog(root, "Viewing patch files", work, initial_status="Loading…")
             else:
                 messagebox.showerror("Error", f"Could not find details for patch {patch_values[0]}")
 
@@ -266,20 +297,21 @@ class ContextMenuManager:
         if selected:
             item_id = selected[0]
             patch_values = treeview.item(item_id, "values")
-            # Get full patch info using the patch name (first value)
             full_patch_info = get_full_patch_info(patch_values[0])
-            if full_patch_info and remove_patch(full_patch_info):
-                treeview.delete(item_id)
+            if full_patch_info:
+                remove_patch_busy(
+                    treeview.winfo_toplevel(),
+                    full_patch_info,
+                    on_success=lambda: treeview.delete(item_id),
+                )
             else:
                 messagebox.showerror("Error", f"Could not find details for patch {patch_values[0]}")
 
     def _refresh_patches(self, treeview):
         """Refresh patches list."""
-        # Try to get prefix from stored reference first
         prefix = self.get_current_prefix()
         
         if not prefix:
-            # Fallback: search for prefix combobox in root window
             root_widget = treeview.winfo_toplevel()
             prefix_combo = self._find_prefix_combobox(root_widget)
             if prefix_combo:
@@ -289,40 +321,20 @@ class ContextMenuManager:
                     log_error(f"Error getting prefix from combo: {e}")
         
         if not prefix:
-            # Fallback to default from config
             from config import load_config
             config = load_config()
             prefix = config.get("patch_prefix", ["S"])[0] if config.get("patch_prefix") else "S"
         
-        from config import load_config
-        config = load_config()
-        refresh_patches(treeview, False, prefix, config.get("username"))
+        load_patches_busy(treeview.winfo_toplevel(), treeview, False, prefix)
 
     def refresh_available_locked_files(self, locked_files_treeview, main_treeview):
-        """Refresh the list of locked files."""
+        """Refresh the list of locked files (with busy dialog)."""
         try:
-            # Clear the locked files treeview
-            locked_files_treeview.delete(*locked_files_treeview.get_children())
-            
-            # Get all locked files
-            locked_files = get_all_locked_files()
-            
-            # Get existing files in main treeview
-            existing_files = set()
-            for item in main_treeview.get_children():
-                file_path = main_treeview.item(item, "values")[2]
-                existing_files.add(file_path)
-            
-            # Add locked files not in main treeview
-            for file_path, revision, lock_date in locked_files:
-                if file_path not in existing_files:
-                    locked_files_treeview.insert(
-                        "", "end",
-                        values=("locked", revision, file_path, lock_date)
-                    )
-                    
-            locked_files_treeview.update()
-            
+            load_locked_files_busy(
+                locked_files_treeview.winfo_toplevel(),
+                locked_files_treeview,
+                exclude_treeview=main_treeview,
+            )
         except Exception as e:
             print(f"Error refreshing locked files: {e}")
             log_error(f"Error refreshing locked files: {e}")

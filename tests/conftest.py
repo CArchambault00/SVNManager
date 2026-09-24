@@ -95,6 +95,7 @@ def mock_messagebox(monkeypatch):
         "app.messagebox",
         "native_topbar.messagebox",
         "buttons_function.messagebox",
+        "busy_dialog.messagebox",
     ):
         try:
             monkeypatch.setattr(f"{mod}.showerror", stubs.showerror, raising=False)
@@ -304,6 +305,18 @@ def reset_state_manager():
     state_manager.is_loading = False
 
 
+@pytest.fixture(autouse=True)
+def _reset_busy_dialog_state():
+    """Ensure background busy sessions never leak across tests."""
+    yield
+    try:
+        import busy_dialog as bd
+
+        bd._force_clear_session()
+    except Exception:
+        pass
+
+
 @pytest.fixture
 def tk_root():
     """Create a Tk root for GUI tests; skip if display is unavailable."""
@@ -318,6 +331,12 @@ def tk_root():
             root = tk.Tk()
         root.withdraw()
         yield root
+        try:
+            import busy_dialog as bd
+
+            bd._force_clear_session()
+        except Exception:
+            pass
         try:
             root.destroy()
         except Exception:

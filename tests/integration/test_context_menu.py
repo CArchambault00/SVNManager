@@ -111,7 +111,6 @@ def test_add_to_main_and_remove_from_patch(tk_root, tmp_appdata, sample_config, 
 
     main.selection_set(main.get_children()[0])
     monkeypatch.setattr(mgr, "_find_locked_files_treeview", MagicMock(return_value=locked))
-    monkeypatch.setattr("context_menu.get_file_info", MagicMock(return_value=(True, "tester", "1", "d")))
     mgr._remove_from_patch(main)
     assert main.get_children() == ()
     assert [locked.item(i, "values")[2] for i in locked.get_children()] == ["webpage/a.asp"]
@@ -130,6 +129,16 @@ def test_build_view_remove_patch_handlers(tk_root, mock_messagebox, monkeypatch)
     }
     po.patch_info_dict["S1.0.0001-W0"] = info
 
+    # Run busy work inline so this unit-style test stays on the main thread.
+    monkeypatch.setattr(
+        "context_menu.run_with_busy_dialog",
+        lambda parent, title, work_fn, initial_status="Please wait...": work_fn(lambda _m: None),
+    )
+    monkeypatch.setattr(
+        "busy_dialog.run_with_busy_dialog",
+        lambda parent, title, work_fn, initial_status="Please wait...": work_fn(lambda _m: None),
+    )
+
     mgr = ContextMenuManager()
     tree = _patches_tree(tk_root, ["S1.0.0001-W0"])
     tree.selection_set(tree.get_children()[0])
@@ -139,7 +148,13 @@ def test_build_view_remove_patch_handlers(tk_root, mock_messagebox, monkeypatch)
     remove = MagicMock(return_value=True)
     monkeypatch.setattr("context_menu.build_patch", build)
     monkeypatch.setattr("context_menu.view_files_from_patch", view)
-    monkeypatch.setattr("context_menu.remove_patch", remove)
+    monkeypatch.setattr(
+        "context_menu.remove_patch_busy",
+        lambda parent, info, on_success=None: (
+            remove(info),
+            on_success() if on_success else None,
+        ),
+    )
 
     mgr._build_patch(tree)
     build.assert_called_once_with(info)

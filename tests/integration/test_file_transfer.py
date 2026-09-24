@@ -65,7 +65,7 @@ def test_remove_selected_without_locked_view(tk_root):
     assert [main.item(i, "values")[2] for i in main.get_children()] == ["webpage/b.asp"]
 
 
-def test_remove_returns_to_locked_if_locked_by_user(tk_root, tmp_appdata, sample_config, monkeypatch):
+def test_remove_returns_to_locked_if_locked_by_user(tk_root, tmp_appdata, sample_config):
     from file_transfer import remove_and_return_selected_files
 
     main = _make_tree(tk_root, [("locked", "1", "webpage/a.asp", "d")])
@@ -73,26 +73,18 @@ def test_remove_returns_to_locked_if_locked_by_user(tk_root, tmp_appdata, sample
     item = main.get_children()[0]
     main.selection_set(item)
 
-    monkeypatch.setattr(
-        "file_transfer.get_file_info",
-        MagicMock(return_value=(True, "tester", "1", "d")),
-    )
     remove_and_return_selected_files(main, locked)
 
     assert len(main.get_children()) == 0
     assert locked.item(locked.get_children()[0], "values")[2] == "webpage/a.asp"
 
 
-def test_remove_does_not_return_if_not_locked_by_user(tk_root, tmp_appdata, sample_config, monkeypatch):
+def test_remove_does_not_return_if_not_locked_by_user(tk_root, tmp_appdata, sample_config):
     from file_transfer import remove_and_return_selected_files
 
     main = _make_tree(tk_root, [("unlocked", "1", "webpage/a.asp", "")])
     locked = _make_tree(tk_root)
     main.selection_set(main.get_children()[0])
-    monkeypatch.setattr(
-        "file_transfer.get_file_info",
-        MagicMock(return_value=(False, "", "1", "")),
-    )
     remove_and_return_selected_files(main, locked)
     assert len(main.get_children()) == 0
     assert len(locked.get_children()) == 0

@@ -1,16 +1,16 @@
 # patches_operation.py
 from db_handler import dbClass
-from svn_operations import get_file_specific_version, get_file_info, commit_files, get_file_head_revision
+from svn_operations import get_file_specific_version, get_file_info_batch, commit_files, get_file_head_revision_batch, get_wc_root
 import os
 from config import load_config, verify_config, log_error, log_success
-from patch_generation import create_patch_files_batch
+from patch_utils import (
+    get_md5_checksum_batch, cleanup_files, create_depend_txt, create_readme_file,
+    setup_patch_folder, create_main_sql_file, get_managed_dest_paths,
+    backup_extra_patch_files, restore_extra_patch_files, backup_existing_main_sql,
+    create_patch_files_batch,
+)
 import tkinter as tk
 import time
-from patch_utils import (
-    get_md5_checksum, cleanup_files, create_depend_txt, create_readme_file,
-    setup_patch_folder, create_main_sql_file, get_managed_dest_paths,
-    backup_extra_patch_files, restore_extra_patch_files, backup_existing_main_sql
-)
 from tkinter import messagebox
 import datetime as date
 from version_operation import parse_version
@@ -24,37 +24,13 @@ selected_patch = None
 
 def refresh_patches(treeview, temp, application_id, username):
     """
-    Refresh the patches displayed in the Treeview.
+    Refresh the patches displayed in the Treeview (synchronous).
+    Prefer busy_ops.load_patches_busy for UI entry points.
     """
-    db = dbClass()
+    from busy_ops import apply_patches_to_tree, fetch_patches
 
-    # Clear existing items
-    for item in treeview.get_children():
-        treeview.delete(item)
-    patch_info_dict.clear()
-
-    # Fetch patches from the database
-    patches = db.get_patch_list(temp, application_id)
-    # Insert patches into the Treeview
-    for patch in patches:
-        # Replace None or empty fields with ""
-        name = patch.get("NAME") or ""
-        comments = (patch.get("COMMENTS") or "").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
-        patch_size = patch.get("PATCH_SIZE") or 0
-        user_id = patch.get("USER_ID") or ""
-        creation_date = patch.get("CREATION_DATE") or ""
-        checklist_count = patch.get("CHECK_LIST_COUNT") or ""
-
-        patch_info_dict[name] = patch
-
-        treeview.insert("", "end", values=(
-            name,
-            comments,
-            patch_size,
-            user_id,
-            creation_date,
-            checklist_count
-        ))
+    patches = fetch_patches(temp, application_id)
+    apply_patches_to_tree(treeview, patches)
 
 def refresh_patches_dict(temp, application_id):
     """
@@ -99,13 +75,7 @@ def build_patch(patch_info):
         patch_id = patch_info["PATCH_ID"]
         files = db.get_patch_file_list_new(patch_id)
 
-        wc_root = subprocess.run(
-            ["svn", "info", "--show-item", "wc-root", svn_path],
-            capture_output=True,
-            text=True,
-            shell=False,
-            creationflags=subprocess.CREATE_NO_WINDOW
-        ).stdout.strip().replace("\\", "/")
+        wc_root = get_wc_root(svn_path)
         for file in files:
             if file["FOLDER_TYPE"] == '1':
                 file_path = file["PATH"].replace(file["SVN_PATH"], "Web")
@@ -153,34 +123,20 @@ def build_patch(patch_info):
 
 def refresh_patch_files(treeview, patch_info):
     """
-    Refresh the files in the patch.
+    Refresh the files in the patch (synchronous).
+    Prefer busy_ops.load_patch_files_busy / load_modify_patch_screen_busy for UI.
     """
-    db = dbClass()
-    
-    # Clear existing items
-    for item in treeview.get_children():
-        treeview.delete(item)
+    from busy_ops import apply_patch_file_rows, fetch_patch_file_rows
 
-    patch_id = patch_info["PATCH_ID"]
-    files = db.get_patch_file_list_new(patch_id)
-    for file in files:
-        if file["FOLDER_TYPE"] == '1':
-            file_path = file["PATH"]
-        else:
-            file_path = file["PATH"]
-        lock_by_user,lock_owner,svn_revision, lock_date = get_file_info(file_path)
-        if lock_by_user:
-            item = treeview.insert('', 'end', values=('locked',file["VERSION"], file_path, lock_date))
-            treeview.selection_add(item)
-        elif lock_by_user== False and lock_owner == "":
-            item = treeview.insert('', 'end', values=('unlocked',file["VERSION"], file_path, lock_date))
-            treeview.selection_add(item)
-        else:
-            item = treeview.insert('', 'end', values=(f'@locked - {lock_owner}',file["VERSION"], file_path, lock_date))
-            treeview.selection_add(item)
+    rows = fetch_patch_file_rows(patch_info)
+    apply_patch_file_rows(treeview, rows)
 
 def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_entry, 
-                patch_description, switch_to_modify_patch_menu, unlock_files):
+                patch_description, switch_to_modify_patch_menu, unlock_files, status_callback=None):
+    def status(msg):
+        if status_callback:
+            status_callback(msg)
+
     verify_config()
     db = dbClass()
     config = load_config()
@@ -207,6 +163,7 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
                                      "No files selected. Do you want to modify the patch to have no files?"):
                 return
 
+        status("Backing up extra patch files…")
         # Preserve manually-added files (e.g. DB scripts dropped into the patch folder)
         # that are not part of the locked/unlocked SVN file list.
         old_files = db.get_patch_file_list_new(patch_id)
@@ -229,15 +186,10 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         cleanup_files(patch_version_folder)
         
         os.makedirs(current_patches, exist_ok=True)
+        status(f"Committing {len(selected_files)} file(s) to SVN…")
         commit_files(selected_files,unlock_files)
 
-        wc_root = subprocess.run(
-            ["svn", "info", "--show-item", "wc-root", svn_path],
-            capture_output=True,
-            text=True,
-            shell=False,
-            creationflags=subprocess.CREATE_NO_WINDOW
-        ).stdout.strip().replace("\\", "/")
+        wc_root = get_wc_root(svn_path)
 
         db.conn.begin()
         parsed_version = parse_version(patch_version_entry)
@@ -249,24 +201,41 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         db.delete_patch_detail(patch_id)
         
         os.makedirs(patch_version_folder, exist_ok=True)
-        
-        for file in selected_files:
-            fake_path = '$/Projects/SVN/' + file
-            filename = os.path.basename(file)
-            clean_path = file.replace(filename, "")
 
-            parts = file.replace("\\", "/").split("/")
-            if file.startswith('Projects/'):
-                soft_path = "/".join(parts[:4])
-            else:
-                soft_path = "/".join(parts[:1])
-            folder_id = db.get_folder_id(soft_path)
-            file_id = db.create_patch_detail(patch_id, fake_path, clean_path, filename, get_file_head_revision(file), folder_id)
-            md5checksum = get_md5_checksum(f"{wc_root}/{file}")
-            db.set_md5(patch_id, file_id, md5checksum)
+        BATCH_SIZE = 50
+        folder_id_cache = {}
+        total = len(selected_files)
+        for i in range(0, len(selected_files), BATCH_SIZE):
+            batch = selected_files[i:i + BATCH_SIZE]
+            status(f"Recording file details ({min(i + BATCH_SIZE, total)}/{total})…")
+            revisions = get_file_head_revision_batch(batch)
+            md5_checksums = get_md5_checksum_batch([f"{wc_root}/{file}" for file in batch])
+
+            for file in batch:
+                fake_path = '$/Projects/SVN/' + file
+                filename = os.path.basename(file)
+                clean_path = file.replace(filename, "")
+
+                parts = file.replace("\\", "/").split("/")
+                if file.startswith('Projects/'):
+                    soft_path = "/".join(parts[:4])
+                else:
+                    soft_path = "/".join(parts[:1])
+                if soft_path not in folder_id_cache:
+                    folder_id_cache[soft_path] = db.get_folder_id(soft_path)
+                folder_id = folder_id_cache[soft_path]
+                file_id = db.create_patch_detail(
+                    patch_id, fake_path, clean_path, filename,
+                    revisions.get(file, ""), folder_id,
+                )
+                md5checksum = md5_checksums.get(f"{wc_root}/{file}")
+                if md5checksum:
+                    db.set_md5(patch_id, file_id, md5checksum)
             
+        status("Copying files into patch folder…")
         create_patch_files_batch(selected_files, svn_path, patch_version_folder)
         
+        status("Writing ReadMe / MainSQL / depend…")
         create_readme_file(patch_version_folder, patch_name, username, 
                          time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)
         
@@ -324,16 +293,17 @@ def view_files_from_patch(patch_info):
     patch_id = patch_info["PATCH_ID"]
     files = db.get_patch_file_list_new(patch_id)
     file_list = []
+    file_paths = [file["PATH"] for file in files]
+    info_results = get_file_info_batch(file_paths) if file_paths else {}
 
     for file in files:
-        if file["FOLDER_TYPE"] == '1':
-            file_path = file["PATH"]
-        else:
-            file_path = file["PATH"]
-        lock_by_user,lock_owner,svn_revision, lock_date = get_file_info(file_path)
+        file_path = file["PATH"]
+        lock_by_user, lock_owner, svn_revision, lock_date = info_results.get(
+            file_path, (False, "", "", "")
+        )
         if lock_by_user:
             file_list.append(f'locked || VERSION: {file["VERSION"]} || {file_path} || LOCKDATE: {lock_date}')
-        elif lock_by_user== False and lock_owner == "":
+        elif lock_owner == "":
             file_list.append(f'unlocked || VERSION: {file["VERSION"]} || {file_path}')
         else:
             file_list.append(f'@locked - {lock_owner} || VERSION: {file["VERSION"]} || {file_path} || LOCKDATE: {lock_date}')
@@ -341,12 +311,13 @@ def view_files_from_patch(patch_info):
     display_patch_files(file_list, patch_info["NAME"], patch_info["COMMENTS"], 
                         patch_info["USER_ID"], str(patch_info["CREATION_DATE"]))
 
-def remove_patch(patch_info):
+def remove_patch(patch_info, confirm=True):
     """
     Remove a patch from the database.
     
     Args:
         patch_info: Dictionary containing patch details
+        confirm: If True, ask for confirmation before removing
     """
     try:
         db = dbClass()
@@ -356,9 +327,12 @@ def remove_patch(patch_info):
         patch_name = patch_info["NAME"]
         
         # Ask for confirmation before removing the patch
-        if not messagebox.askyesno("Confirm Removal", 
-                                f"Are you sure you want to remove patch '{patch_name}'?\nThis action cannot be undone."):
-            return
+        if confirm:
+            if not messagebox.askyesno(
+                "Confirm Removal",
+                f"Are you sure you want to remove patch '{patch_name}'?\nThis action cannot be undone.",
+            ):
+                return False
         
         # Remove the patch from the database
         db.conn.begin()

@@ -55,10 +55,13 @@ def _svn_run_with_status(args, *a, **kwargs):
 
 def test_unlock_files_success(tmp_appdata, sample_config, mock_messagebox, monkeypatch):
     monkeypatch.setattr(svn.subprocess, "run", _svn_run_with_status)
-    monkeypatch.setattr(svn, "refresh_locked_files", MagicMock())
-    svn.unlock_files(["webpage/a.asp"], MagicMock())
+    monkeypatch.setattr(svn, "update_listbox_file_info", MagicMock())
+    listbox = MagicMock()
+    svn.unlock_files(["webpage/a.asp"], listbox)
     mock_messagebox.showinfo.assert_called()
-    svn.refresh_locked_files.assert_called_once()
+    svn.update_listbox_file_info.assert_called_once_with(
+        listbox, paths=["webpage/a.asp"], remove_if_not_user_locked=True
+    )
 
 
 def test_revert_files(tmp_appdata, sample_config, mock_messagebox, monkeypatch):
@@ -69,8 +72,11 @@ def test_revert_files(tmp_appdata, sample_config, mock_messagebox, monkeypatch):
         return _svn_run_with_status(args, *a, **kwargs)
 
     monkeypatch.setattr(svn.subprocess, "run", tracking_run)
-    svn.revert_files(["webpage/a.asp"])
-    assert any(c[:2] == ["svn", "revert"] for c in calls)
+    svn.revert_files(["webpage/a.asp", "webpage/b.asp"])
+    revert_calls = [c for c in calls if c[:2] == ["svn", "revert"]]
+    assert revert_calls
+    assert "webpage/a.asp" in revert_calls[0]
+    assert "webpage/b.asp" in revert_calls[0]
 
 
 def test_refresh_locked_files_inserts_user_locks(
@@ -78,16 +84,25 @@ def test_refresh_locked_files_inserts_user_locks(
 ):
     from tkinter import ttk
 
-    monkeypatch.setattr(svn.subprocess, "run", _svn_run_with_status)
-    monkeypatch.setattr(svn, "get_relative_path", MagicMock(return_value=""))
+    status_calls = []
+
+    def tracking_run(args, *a, **kwargs):
+        if args and len(args) > 1 and args[1] == "status":
+            status_calls.append(list(args))
+        return _svn_run_with_status(args, *a, **kwargs)
+
+    monkeypatch.setattr(svn.subprocess, "run", tracking_run)
 
     tree = ttk.Treeview(tk_root, columns=("Status", "Version", "File", "Lock Date"), show="headings")
     svn.refresh_locked_files(tree)
 
+    assert status_calls
+    assert "--verbose" not in status_calls[0]
     files = [tree.item(i, "values")[2] for i in tree.get_children()]
     assert "webpage/a.asp" in files
     assert "webpage/other.asp" not in files  # other owner
     assert "webpage/free.asp" not in files  # unlocked
+    assert tree.selection() == ()  # no select-all
 
 
 def test_refresh_locked_files_invalid_path(tmp_appdata, mock_messagebox, monkeypatch):
@@ -102,7 +117,6 @@ def test_refresh_locked_files_invalid_path(tmp_appdata, mock_messagebox, monkeyp
 
 def test_get_all_locked_files(tmp_appdata, sample_config, mock_messagebox, monkeypatch):
     monkeypatch.setattr(svn.subprocess, "run", _svn_run_with_status)
-    monkeypatch.setattr(svn, "get_relative_path", MagicMock(return_value=""))
     locked = svn.get_all_locked_files()
     paths = [p[0] for p in locked]
     assert paths == ["webpage/a.asp"]
@@ -120,6 +134,7 @@ def test_lock_reports_locked_by_others(tmp_appdata, sample_config, mock_messageb
         return result
 
     monkeypatch.setattr(svn.subprocess, "run", run_lock_fail)
-    monkeypatch.setattr(svn, "refresh_locked_files", MagicMock())
+    monkeypatch.setattr(svn, "update_listbox_file_info", MagicMock())
     svn.lock_files(["webpage/a.asp"], MagicMock())
     mock_messagebox.showerror.assert_called()
+    svn.update_listbox_file_info.assert_not_called()

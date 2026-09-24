@@ -115,7 +115,7 @@ def initialize_native_topbar(root, app_version):
 
     # Add Config menu
     menu_bar.add_cascade(
-        label=f"Config {'✔️' if config.get("username") else '❌'}",
+        label=f"Config {'✔️' if config.get('username') else '❌'}",
         menu=config_menu
     )
 
