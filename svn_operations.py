@@ -1,7 +1,8 @@
 # svn_operations.py
 import subprocess
+import shutil
 from tkinter import messagebox
-from config import load_config, verify_config, log_error, log_success
+from config import load_config, verify_config, log_error, log_success, log_action, log_command
 import xml.etree.ElementTree as ET
 import os
 import re
@@ -24,7 +25,134 @@ def run_svn(args, **kwargs):
         kwargs.setdefault("encoding", "utf-8")
         kwargs.setdefault("errors", "surrogateescape")
 
-    return subprocess.run(args, **kwargs)
+    tool = "svn"
+    if args:
+        tool = os.path.basename(str(args[0]))
+    log_command(tool, args, cwd=kwargs.get("cwd"), outcome="started")
+
+    result = subprocess.run(args, **kwargs)
+
+    if getattr(result, "returncode", 0) != 0:
+        stderr = getattr(result, "stderr", None) or ""
+        log_command(
+            tool,
+            args,
+            cwd=kwargs.get("cwd"),
+            outcome=f"returncode={result.returncode}",
+            stderr=stderr,
+        )
+    return result
+
+
+def _registry_tortoise_directory():
+    """Return TortoiseSVN Directory from HKLM then HKCU, or None."""
+    if os.name != "nt":
+        return None
+    try:
+        import winreg
+    except ImportError:
+        return None
+    for root in (getattr(winreg, "HKEY_LOCAL_MACHINE", None), getattr(winreg, "HKEY_CURRENT_USER", None)):
+        if root is None:
+            continue
+        try:
+            with winreg.OpenKey(root, r"Software\TortoiseSVN") as key:
+                directory, _ = winreg.QueryValueEx(key, "Directory")
+                if directory:
+                    return directory
+        except OSError:
+            continue
+    return None
+
+
+def find_tortoise_proc():
+    """
+    Locate TortoiseProc.exe: registry Directory, then Program Files paths, then PATH.
+    Returns absolute path or None. Logs each probe result.
+    """
+    # 1) Registry
+    directory = _registry_tortoise_directory()
+    if directory:
+        candidate = os.path.join(directory, "bin", "TortoiseProc.exe")
+        if os.path.isfile(candidate):
+            log_action("TortoiseProc resolved", source="registry", path=candidate)
+            return candidate
+        log_action("TortoiseProc probe", source="registry", path=candidate, outcome="not found")
+    else:
+        log_action("TortoiseProc probe", source="registry", outcome="Directory not set")
+
+    # 2) Program Files
+    for base in (
+        os.environ.get("ProgramFiles", r"C:\Program Files"),
+        os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+    ):
+        if not base:
+            continue
+        candidate = os.path.join(base, "TortoiseSVN", "bin", "TortoiseProc.exe")
+        if os.path.isfile(candidate):
+            log_action("TortoiseProc resolved", source="program_files", path=candidate)
+            return candidate
+        log_action("TortoiseProc probe", source="program_files", path=candidate, outcome="not found")
+
+    # 3) PATH
+    which = shutil.which("TortoiseProc.exe")
+    if which and os.path.isfile(which):
+        log_action("TortoiseProc resolved", source="path", path=which)
+        return which
+    log_action("TortoiseProc probe", source="path", outcome="not found")
+    return None
+
+
+def build_tortoise_diff_argv(tortoise_exe, full_path):
+    """Build TortoiseProc argv for /command:diff.
+
+    Do not embed quotes in /path: — with shell=False, Windows list2cmdline
+    already quotes the whole argument when the path has spaces. Embedded
+    quotes become literal \\\" and Tortoise fails silently.
+    """
+    normalized = os.path.normpath(full_path)
+    return [
+        tortoise_exe,
+        "/command:diff",
+        f"/path:{normalized}",
+    ]
+
+
+def launch_tortoise_diff(full_path):
+    """
+    Launch TortoiseSVN visual diff via Popen (GUI). Returns True if spawn succeeded.
+    """
+    tortoise_exe = find_tortoise_proc()
+    if not tortoise_exe:
+        log_error("TortoiseProc.exe not found (registry / Program Files / PATH)")
+        log_action("View Diff Tortoise unavailable", details="TortoiseProc.exe not found")
+        return False
+
+    argv = build_tortoise_diff_argv(tortoise_exe, full_path)
+    log_command("TortoiseProc", argv, outcome="launching")
+    try:
+        proc = subprocess.Popen(argv, shell=False)
+    except (FileNotFoundError, OSError) as e:
+        log_error(f"TortoiseSVN launch failed: {e}")
+        log_action("View Diff Tortoise launch failed", details=str(e), path=full_path)
+        return False
+
+    # Non-blocking early-death check
+    try:
+        early = proc.poll()
+        if early is not None and early != 0:
+            msg = f"TortoiseProc exited immediately with returncode={early}"
+            log_error(msg)
+            log_action("View Diff Tortoise early exit", outcome=f"returncode={early}", path=full_path)
+            return False
+    except Exception as e:
+        log_action("View Diff Tortoise poll skipped", details=str(e))
+
+    log_action(
+        "View Diff Tortoise launched",
+        details=f"{tortoise_exe} | {os.path.normpath(full_path)}",
+    )
+    return True
 
 
 def repair_mojibake_path(path):
@@ -240,6 +368,11 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True, batch_size=50):
             return
 
         command = "lock" if lock else "unlock"
+        log_action(
+            f"SVN {command} started",
+            count=len(selected_files),
+            username=username,
+        )
         base_args = ["svn", command]
 
         if lock:
@@ -339,6 +472,11 @@ def refresh_locked_files(files_listbox):
 
 def commit_files_batch(selected_files, unlock_files, batch_size=50):
     """Commit files in batches to avoid command line length limits."""
+    log_action(
+        "SVN commit started",
+        count=len(selected_files or []),
+        unlock=unlock_files,
+    )
     config = load_config()
     username = config.get("username")
     svn_path = config.get("svn_path")
@@ -652,98 +790,82 @@ def get_file_head_revision(file):
     return results.get(file, "")
 
 
+def _show_text_diff_fallback(wc_root, rel_path):
+    """Show svn diff output in a Tk window, or inform user if no differences."""
+    result = run_svn(
+        ["svn", "diff", rel_path],
+        cwd=wc_root,
+        capture_output=True,
+        text=True,
+        shell=False,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    if result.stdout:
+        import tkinter as tk
+        from tkinter import scrolledtext
+
+        diff_window = tk.Toplevel()
+        diff_window.title(f"Diff for {rel_path}")
+        diff_window.geometry("800x600")
+
+        diff_text = scrolledtext.ScrolledText(diff_window, wrap=tk.WORD, font=("Courier New", 10))
+        diff_text.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
+        diff_text.insert(tk.END, result.stdout)
+        diff_text.config(state=tk.DISABLED)
+
+        close_button = tk.Button(diff_window, text="Close", command=diff_window.destroy)
+        close_button.pack(pady=10)
+
+        log_action("View Diff text fallback shown", file=rel_path)
+        return
+
+    messagebox.showinfo("No Differences", f"No differences found for:\n{rel_path}")
+    log_action("View Diff no differences", file=rel_path)
+
+
 def view_file_native_diff(file_path):
     """
-    Open the native SVN diff tool to compare working copy with repository version.
-    
+    Open TortoiseSVN diff (preferred) or a text-diff fallback window.
+
     Args:
-        file_path: Path to the file to compare
+        file_path: WC-relative path to the file to compare
     """
+    log_action("View Diff requested", file=file_path)
     try:
         config = load_config()
         svn_path = config.get("svn_path")
+        if not svn_path:
+            messagebox.showerror("Error", "SVN path not configured")
+            log_error("View Diff failed: SVN path not configured")
+            return
 
-        wc_root = run_svn(
-            ["svn", "info", "--show-item", "wc-root", svn_path],
-            capture_output=True,
-            text=True,
-            shell=False,
-            creationflags=subprocess.CREATE_NO_WINDOW
-        ).stdout.strip().replace("\\", "/")
+        wc_root = get_wc_root(svn_path)
+        rel_path = resolve_wc_relative_path(wc_root, file_path)
+        full_path = os.path.normpath(os.path.join(wc_root, rel_path))
+        log_action(
+            "View Diff path resolved",
+            relative=rel_path,
+            absolute=full_path,
+            wc_root=wc_root,
+        )
 
-        full_path = os.path.join(wc_root, file_path)
-        
-        # Method 1: Try TortoiseSVN first (best visual diff on Windows)
-        try:
-            tortoise_path = "TortoiseProc.exe"
-            result = run_svn(
-                [tortoise_path, "/command:diff", f"/path:{full_path}"],
-                capture_output=True,
-                text=True,
-                shell=False,
-                creationflags=subprocess.CREATE_NO_WINDOW
-            )
-            if result.returncode == 0:
-                return  # TortoiseSVN opened successfully
-        except FileNotFoundError:
-            # TortoiseProc not found, continue to next method
-            pass
-        except Exception as e:
-            print(f"TortoiseSVN error: {e}")
-            log_error(f"TortoiseSVN error: {e}")
-        
-        # Method 2: Try using SVN diff with system-configured diff tool
-        try:
-            result = run_svn(
-                ["svn", "diff", file_path],
-                cwd=wc_root,
-                shell=False
-            )
-            if result.returncode == 0:
-                return  # SVN diff opened successfully
-        except Exception as e:
-            print(f"SVN diff error: {e}")
-            log_error(f"SVN diff error: {e}")
-            
-        # Method 3: If previous methods failed, get the diff content and display in a window
+        if not os.path.exists(full_path):
+            messagebox.showerror("Error", f"File not found: {full_path}")
+            log_error(f"View Diff failed: file not found: {full_path}")
+            return
 
+        if launch_tortoise_diff(full_path):
+            return
+
+        log_action("View Diff falling back to text window", file=rel_path)
         try:
-            result = run_svn(
-                ["svn", "diff", file_path],
-                cwd=wc_root,
-                capture_output=True,
-                text=True,
-                shell=False,
-                creationflags=subprocess.CREATE_NO_WINDOW
-            )
-            
-            # If we have diff content, show it in a window
-            if result.stdout:
-                # Create a new window to display the diff
-                import tkinter as tk
-                from tkinter import scrolledtext
-                
-                diff_window = tk.Toplevel()
-                diff_window.title(f"Diff for {file_path}")
-                diff_window.geometry("800x600")
-                
-                diff_text = scrolledtext.ScrolledText(diff_window, wrap=tk.WORD, font=("Courier New", 10))
-                diff_text.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
-                diff_text.insert(tk.END, result.stdout)
-                diff_text.config(state=tk.DISABLED)  # Make it read-only
-                
-                # Add a close button
-                close_button = tk.Button(diff_window, text="Close", command=diff_window.destroy)
-                close_button.pack(pady=10)
-                
-                return
-            else:
-                raise Exception("No differences found or failed to retrieve diff content")
-                
+            _show_text_diff_fallback(wc_root, rel_path)
         except Exception as e:
-            raise Exception(f"Failed to show diff: {e}")
-                
+            log_error(f"Failed to show text diff: {e}", include_stack=True)
+            messagebox.showerror("Error", f"Failed to open diff viewer:\n{e}")
+
     except Exception as e:
+        log_error(f"Failed to open diff viewer: {e}", include_stack=True)
         messagebox.showerror("Error", f"Failed to open diff viewer:\n{e}")
 
 def refresh_file_status_version(files_listbox):

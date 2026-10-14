@@ -2,7 +2,7 @@
 from db_handler import dbClass
 from svn_operations import get_file_specific_version, get_file_info_batch, commit_files, get_file_head_revision_batch, get_wc_root
 import os
-from config import load_config, verify_config, log_error, log_success
+from config import load_config, verify_config, log_error, log_success, log_action
 from patch_utils import (
     get_md5_checksum_batch, cleanup_files, create_depend_txt, create_readme_file,
     setup_patch_folder, create_main_sql_file, get_managed_dest_paths,
@@ -64,6 +64,7 @@ def get_selected_patch():
 
 def build_patch(patch_info):
     config = load_config()
+    log_action("Patch build started", patch=patch_info.get("NAME"), patch_id=patch_info.get("PATCH_ID"))
     
     patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_info["NAME"])
     os.makedirs(patch_version_folder, exist_ok=True)
@@ -146,6 +147,13 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
 
     patch_version_entry = patch_version_entry.upper()
     patch_name = patch_version_prefixe + patch_version_entry
+    log_action(
+        "Patch update started",
+        patch=patch_name,
+        patch_id=patch_id,
+        file_count=len(selected_files or []),
+        unlock=unlock_files,
+    )
     patch_version_folder = os.path.join(current_patches, patch_name)
     extras_backup = None
 
@@ -332,7 +340,10 @@ def remove_patch(patch_info, confirm=True):
                 "Confirm Removal",
                 f"Are you sure you want to remove patch '{patch_name}'?\nThis action cannot be undone.",
             ):
+                log_action("Patch removal cancelled", patch=patch_name)
                 return False
+
+        log_action("Patch removal started", patch=patch_name, patch_id=patch_id)
         
         # Remove the patch from the database
         db.conn.begin()

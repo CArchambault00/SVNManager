@@ -1,5 +1,5 @@
 from tkinter import filedialog, messagebox, simpledialog
-from config import load_config, save_config, get_unset_var
+from config import load_config, save_config, get_unset_var, log_action
 import subprocess
 import os
 import tkinter as tk
@@ -35,18 +35,21 @@ def handle_path_selection(title, validation_func, success_callback, error_messag
 
 
 def set_username(config_menu, menu_bar):
+    log_action("Set username opened")
     config = load_config()
     username = config.get("username", "")
 
     if username:
         show_messagebox("info", "Info", f"Username is already set to: {username}")
         if not messagebox.askyesno("Change Username", "Do you want to change the username?"):
+            log_action("Set username cancelled")
             return
 
     username = simpledialog.askstring("Username", "Enter your username")
     if username:
         config["username"] = username
         save_config(config)
+        log_action("Username saved", username=username)
         
         # Update menu labels based on correct conditions
         for i in range(menu_bar.index('end') + 1):

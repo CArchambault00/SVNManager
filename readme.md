@@ -24,9 +24,10 @@ The SVN Manager application is a graphical user interface (GUI) tool designed to
      ```
 
 2. **Configure TortoiseSVN**:
-   - Download TurtoiseSVN [Download](https://tortoisesvn.net/)
+   - Download TortoiseSVN [Download](https://tortoisesvn.net/)
    - Make sure TortoiseSVN is installed on your system.
-   - Remember where you install `TortoiseSVN` for later
+   - **View Diff** finds `TortoiseProc.exe` via the TortoiseSVN registry key, then `Program Files\TortoiseSVN\bin`, then PATH. A normal TortoiseSVN install is enough — PATH is not required.
+   - If View Diff fails, check `%APPDATA%\SVNManager\SVNManager_activity.log` and `SVNManager_error.log` for Tortoise resolve/launch details.
 
 3. **Configure Oracle Instant Client**:
    - Unzip [`instantclient-basic-windows.x64-12.1.0.2.0.zip`]
@@ -108,7 +109,23 @@ The SVN Manager application is a graphical user interface (GUI) tool designed to
 
 ## Configuration Files
 
-- **`svn_config.json`**: Stores the SVN repository path, Instant Client path and username.
+Settings and logs live under `%APPDATA%\SVNManager\` (not next to the exe):
+
+- **`svn_config.json`**: Username and active profile.
+- **`svn_profiles.json`**: Profile definitions (SVN path, patch prefix, DSN, current patches folder).
+- **`SVNManager_activity.log`**: Every user action and important command steps (navigation, View Diff, lock/unlock, patches, DB connect, etc.).
+- **`SVNManager_error.log`**: Errors and stack traces.
+- **`SVNManager_success.log`**: Successful high-level operations (locks, commits, patch create/update/remove).
+
+### Activity-log QA checklist
+
+After a change, walk through once and confirm lines appear in `SVNManager_activity.log`:
+
+1. App start / menu navigation (Lock/Unlock, Create Patch, Patches List, Modify Patch)
+2. Config username / Manage Profiles / Set Active / Reset menu / Exit
+3. Drag-drop files; Lock / Unlock; Refresh locked files; View Diff; Open file location
+4. Generate / Update / Build / Remove patch; Help About
+5. Intentionally break View Diff (rename Tortoise briefly) and confirm Tortoise probe + fallback entries in activity + error logs
 
 ## File Structure
 
@@ -127,5 +144,5 @@ The SVN Manager application is a graphical user interface (GUI) tool designed to
 ## Notes
 
 - Ensure the [svn_config.json](http://_vscodecontentref_/14) file is included in the [.gitignore](http://_vscodecontentref_/15) to avoid committing sensitive information.
-- The application assumes the presence of TortoiseSVN and Oracle database client for certain operations. Adjust paths and configurations as needed.
+- The application assumes TortoiseSVN (for visual View Diff) and Oracle Instant Client for certain operations. Tortoise does not need to be on PATH if installed normally.
 - Antivirus (especially AVG) may flag unsigned Python EXEs. Current releases ship as a zip folder to avoid the old single-file false positive. See [SECURITY.md](./SECURITY.md).

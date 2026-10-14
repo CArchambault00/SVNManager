@@ -17,7 +17,7 @@ from create_buttons import (
     create_button_frame_modify_patch, create_button_frame_patches
 )
 from context_menu import context_menu_manager
-from config import load_config, get_unset_var, log_error
+from config import load_config, get_unset_var, log_error, log_action
 from user_data import (
     get_migration_message,
     should_prompt_for_legacy_settings,
@@ -94,8 +94,10 @@ def check_requirements() -> bool:
         messages.append("Please select or create a profile in the Profile menu")
         
     if messages:
+        log_action("Requirements check failed", details="; ".join(messages))
         messagebox.showwarning("Setup Required", "\n".join(messages))
         return False
+    log_action("Requirements check passed")
     return True
 
 
@@ -169,6 +171,7 @@ def save_patch_form_state(widget, menu_name: str) -> None:
 
 def switch_to_lock_unlock_menu(root_widget=None) -> None:
     """Switch to the lock/unlock menu and set up its UI components."""
+    log_action("Navigate to Lock/Unlock menu")
     if not check_requirements():
         return
     
@@ -222,6 +225,7 @@ def switch_to_lock_unlock_menu(root_widget=None) -> None:
 
 def switch_to_patch_menu(root_widget=None) -> None:
     """Switch to the patch creation menu and set up its UI components."""
+    log_action("Navigate to Create Patch menu")
     if not check_requirements():
         return
     
@@ -384,6 +388,7 @@ def restore_patch_form_state(buttons_frame: dict, state: dict) -> None:
 
 def switch_to_patches_menu(root_widget=None) -> None:
     """Switch to the patches list menu and set up its UI components."""
+    log_action("Navigate to Patches List menu")
     if not check_requirements():
         return
     
@@ -466,6 +471,8 @@ def switch_to_modify_patch_menu(patch_details: Optional[Dict[str, Any]] = None, 
         patch_details: Dictionary containing patch details, or None to use last selected patch
         root_widget: Optional root widget reference, if not provided uses global root
     """
+    patch_name = (patch_details or {}).get("NAME") if isinstance(patch_details, dict) else None
+    log_action("Navigate to Modify Patch menu", patch=patch_name)
     if not check_requirements():
         return
 
@@ -732,19 +739,28 @@ def check_latest_version(root: tk.Tk) -> None:
             latest_version = response.read().decode("utf-8").strip()
 
         if latest_version != APP_VERSION:
+            log_action(
+                "Update available",
+                current=APP_VERSION,
+                latest=latest_version,
+            )
             if messagebox.askyesno("Update Available",
                                  f"A new version ({latest_version}) is available.\n"
                                  "Download SVNManager.zip, extract it, and run "
                                  "SVNManager.exe from inside that folder.\n\n"
                                  "Open the download page now?"):
                 release_url = f"https://github.com/CArchambault00/SVNManager/releases/tag/{latest_version}"
+                log_action("Open release download page", url=release_url)
                 webbrowser.open(release_url)
             sys.exit(0)
+        else:
+            log_action("Version check up to date", version=APP_VERSION)
 
     except Exception as e:
         error_msg = f"Failed to check for latest version: {e}"
         print(error_msg)
         log_error(error_msg)
+        log_action("Version check failed", details=str(e))
 
 
 def save_file_listbox_state_to_manager(file_listbox, menu_name: str) -> None:
@@ -813,6 +829,7 @@ def _offer_settings_migration(root: tk.Tk) -> None:
     """Copy old next-to-exe settings into AppData, or let the user pick that folder once."""
     migration_message = get_migration_message()
     if migration_message:
+        log_action("Settings migration auto-copied")
         messagebox.showinfo("Settings copied", migration_message)
         mark_settings_ready()
         return
@@ -830,22 +847,27 @@ def _offer_settings_migration(root: tk.Tk) -> None:
         parent=root,
     )
     if not locate:
+        log_action("Settings migration declined by user")
         mark_settings_ready()
         return
 
+    log_action("Settings migration locate folder chosen")
     folder = filedialog.askdirectory(
         title="Select the folder that contains svn_config.json and svn_profiles.json",
         parent=root,
     )
     if not folder:
+        log_action("Settings migration folder picker cancelled")
         return
 
     imported = import_from_folder(folder)
     if imported:
+        log_action("Settings migration import succeeded", folder=folder, count=len(imported))
         messagebox.showinfo("Settings copied", get_migration_message(), parent=root)
         mark_settings_ready()
         return
 
+    log_action("Settings migration import failed", folder=folder)
     messagebox.showwarning(
         "Settings not found",
         "svn_config.json and svn_profiles.json were not found in that folder.\n"
@@ -858,6 +880,7 @@ def _offer_settings_migration(root: tk.Tk) -> None:
 def setup_gui() -> tk.Tk:
     """Initialize and set up the GUI for the application."""
     global root
+    log_action("Application starting", version=APP_VERSION)
     root = TkinterDnD.Tk()  # Initialize TkinterDnD root window 
     
     # Set up icon path based on whether we're running from a bundle

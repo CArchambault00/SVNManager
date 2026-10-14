@@ -2,7 +2,7 @@ import tkinter as tk
 from version_operation import next_version
 from patches_operations import get_full_patch_info, set_selected_patch, build_patch, view_files_from_patch
 import os
-from config import load_config
+from config import load_config, log_action
 from tkinter import messagebox
 import subprocess
 
@@ -10,21 +10,27 @@ def lock_selected_files(files_listbox):
     from busy_ops import lock_unlock_busy
 
     selected_files = [files_listbox.item(item, "values")[2] for item in files_listbox.selection()]
+    log_action("Lock selected files clicked", count=len(selected_files))
     lock_unlock_busy(files_listbox.winfo_toplevel(), selected_files, files_listbox, lock=True)
 
 def unlock_selected_files(files_listbox):
     from busy_ops import lock_unlock_busy
 
     selected_files = [files_listbox.item(item, "values")[2] for item in files_listbox.selection()]
+    log_action("Unlock selected files clicked", count=len(selected_files))
     lock_unlock_busy(files_listbox.winfo_toplevel(), selected_files, files_listbox, lock=False)
 
 def insert_next_version(application_id, patch_version_entry):
+    log_action("Next version requested", application_id=application_id)
     new_version = next_version(application_id)
     if new_version:
         patch_version_entry.config(state="normal")
         patch_version_entry.delete(0, tk.END)
         patch_version_entry.insert(0, new_version)
         patch_version_entry.config(state="normal")
+        log_action("Next version inserted", version=new_version)
+    else:
+        log_action("Next version returned empty", application_id=application_id)
 
 def deselect_all_rows(event, files_listbox):
     # Heading clicks must not be treated as empty-area clicks (they sort columns).
@@ -145,6 +151,7 @@ def handle_drop(event, listbox):
     """Handle drag and drop of files/directories onto the listbox."""
     from busy_ops import handle_drop_busy
 
+    log_action("Drag-drop started")
     handle_drop_busy(listbox.winfo_toplevel(), event, listbox)
 
 def _show_files_outside_svn_error(files_outside_svn):
@@ -162,11 +169,13 @@ def _show_files_outside_svn_error(files_outside_svn):
     if remaining > 0:
         error_message += f"\n\n...and {remaining} more files"
     
+    log_action("Files outside SVN scope rejected", count=len(files_outside_svn))
     messagebox.showerror("Files Outside SVN Scope", error_message)
 
 def modify_patch(selected_patch, switch_to_modify_patch_menu):
     if selected_patch:
         patch_details = selected_patch[0]  # Assuming selected_patch is a list of selected items
+        log_action("Modify patch clicked", patch=patch_details[0])
         full_patch_info = get_full_patch_info(patch_details[0])
         if full_patch_info:
             # Always update the globally selected patch with the new selection
@@ -184,6 +193,7 @@ def build_existing_patch(selected_patch):
         import tkinter as tk
 
         patch_details = selected_patch[0]
+        log_action("Build patch clicked", patch=patch_details[0])
         full_patch_info = get_full_patch_info(patch_details[0])
         if not full_patch_info:
             return
@@ -204,6 +214,7 @@ def view_patch_files(selected_patch):
         import tkinter as tk
 
         patch_details = selected_patch[0]
+        log_action("View patch files clicked", patch=patch_details[0])
         full_patch_info = get_full_patch_info(patch_details[0])
         if not full_patch_info:
             return
@@ -230,6 +241,7 @@ def view_selected_file_native_diff(files_listbox):
         
     # Get the file path from the selected item
     file_path = files_listbox.item(selected_items[0], "values")[2]
+    log_action("View Diff clicked", file=file_path)
     from svn_operations import view_file_native_diff
     view_file_native_diff(file_path)
 
@@ -248,6 +260,7 @@ def remove_selected_patch(patches_listbox):
         return
     
     patch_name = patches_listbox.item(selected_items[0], "values")[0]
+    log_action("Remove patch clicked", patch=patch_name)
     full_patch_info = get_full_patch_info(patch_name)
     
     if not full_patch_info:
@@ -279,6 +292,7 @@ def open_file_location(files_listbox):
     
     # Get the file path from the selected item (assuming it's in column index 2)
     relative_file_path = files_listbox.item(selected_items[0], "values")[2]
+    log_action("Open file location clicked", file=relative_file_path)
     
     # Get the SVN path from config to build the full path
     config = load_config()
@@ -318,6 +332,7 @@ def open_file_location(files_listbox):
             '/select,', 
             normalized_path
         ], creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0)
+        log_action("Open file location launched", path=normalized_path)
         
     except Exception as e:
         try:

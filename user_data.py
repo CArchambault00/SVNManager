@@ -8,6 +8,7 @@ CONFIG_FILENAME = "svn_config.json"
 PROFILES_FILENAME = "svn_profiles.json"
 ERROR_LOG_FILENAME = "SVNManager_error.log"
 SUCCESS_LOG_FILENAME = "SVNManager_success.log"
+ACTIVITY_LOG_FILENAME = "SVNManager_activity.log"
 MARKER_FILENAME = "settings_ready.flag"
 
 _migrated_sources = []
@@ -69,6 +70,7 @@ def ensure_user_data() -> str:
     _migrate_file(PROFILES_FILENAME, dest_dir, track=True)
     _migrate_file(ERROR_LOG_FILENAME, dest_dir)
     _migrate_file(SUCCESS_LOG_FILENAME, dest_dir)
+    _migrate_file(ACTIVITY_LOG_FILENAME, dest_dir)
 
     _initialized = True
     return dest_dir
@@ -161,3 +163,4 @@ CONFIG_FILE = os.path.join(USER_DATA_DIR, CONFIG_FILENAME)
 PROFILES_FILE = os.path.join(USER_DATA_DIR, PROFILES_FILENAME)
 ERROR_LOG_FILE = os.path.join(USER_DATA_DIR, ERROR_LOG_FILENAME)
 SUCCESS_LOG_FILE = os.path.join(USER_DATA_DIR, SUCCESS_LOG_FILENAME)
+ACTIVITY_LOG_FILE = os.path.join(USER_DATA_DIR, ACTIVITY_LOG_FILENAME)

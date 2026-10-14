@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from busy_dialog import call_on_main_thread, run_with_busy_dialog
+from config import log_action
 
 
 LockedRow = Tuple[str, str, str]  # path, revision, lock_date
@@ -59,6 +60,7 @@ def load_locked_files_busy(
     on_done: Optional[Callable[[], None]] = None,
 ) -> None:
     """Fetch locked files in background and fill treeview on the main thread."""
+    log_action("Busy op started", op="load_locked_files", title=title)
 
     def work(set_status):
         try:
@@ -81,6 +83,7 @@ def load_locked_files_busy(
                     pass
 
             call_on_main_thread(apply)
+            log_action("Busy op finished", op="load_locked_files", count=len(locked_files))
         finally:
             if on_done is not None:
                 call_on_main_thread(on_done)
@@ -128,6 +131,14 @@ def load_patches_busy(
     initial_status: str = "Querying database…",
     on_done: Optional[Callable[[], None]] = None,
 ) -> None:
+    log_action(
+        "Busy op started",
+        op="load_patches",
+        title=title,
+        application_id=application_id,
+        temp=temp,
+    )
+
     def work(set_status):
         try:
             set_status("Querying database…")
@@ -138,6 +149,7 @@ def load_patches_busy(
                 apply_patches_to_tree(treeview, patches)
 
             call_on_main_thread(apply)
+            log_action("Busy op finished", op="load_patches", count=len(patches))
         finally:
             if on_done is not None:
                 call_on_main_thread(on_done)
@@ -188,6 +200,9 @@ def load_patch_files_busy(
     initial_status: str = "Loading…",
     on_done: Optional[Callable[[], None]] = None,
 ) -> None:
+    patch_name = (patch_info or {}).get("NAME") if isinstance(patch_info, dict) else None
+    log_action("Busy op started", op="load_patch_files", title=title, patch=patch_name)
+
     def work(set_status):
         try:
             set_status("Loading patch files from database…")
@@ -198,6 +213,7 @@ def load_patch_files_busy(
                 apply_patch_file_rows(treeview, rows)
 
             call_on_main_thread(apply)
+            log_action("Busy op finished", op="load_patch_files", count=len(rows), patch=patch_name)
         finally:
             if on_done is not None:
                 call_on_main_thread(on_done)
@@ -216,6 +232,7 @@ def load_modify_patch_screen_busy(
     on_done: Optional[Callable[[], None]] = None,
 ) -> None:
     """One busy session: optional patch files + available locked files + status refresh."""
+    log_action("Busy op started", op="load_modify_patch_screen", title=title)
 
     def work(set_status):
         try:
@@ -244,6 +261,7 @@ def load_modify_patch_screen_busy(
                 )
 
             call_on_main_thread(apply)
+            log_action("Busy op finished", op="load_modify_patch_screen")
         finally:
             if on_done is not None:
                 call_on_main_thread(on_done)
@@ -259,6 +277,8 @@ def load_create_patch_screen_busy(
     title: str = "Loading create patch",
     on_done: Optional[Callable[[], None]] = None,
 ) -> None:
+    log_action("Busy op started", op="load_create_patch_screen", title=title)
+
     def work(set_status):
         try:
             set_status("Querying SVN for locked files…")
@@ -276,6 +296,7 @@ def load_create_patch_screen_busy(
                 )
 
             call_on_main_thread(apply)
+            log_action("Busy op finished", op="load_create_patch_screen", count=len(locked_files))
         finally:
             if on_done is not None:
                 call_on_main_thread(on_done)
@@ -286,6 +307,11 @@ def load_create_patch_screen_busy(
 def lock_unlock_busy(parent, files, listbox, *, lock: bool) -> None:
     action = "Locking" if lock else "Unlocking"
     title = f"{action} files"
+    log_action(
+        "Busy op started",
+        op="lock" if lock else "unlock",
+        count=len(files or []),
+    )
 
     def work(set_status):
         set_status(f"{action} {len(files)} file(s)…")
@@ -295,11 +321,14 @@ def lock_unlock_busy(parent, files, listbox, *, lock: bool) -> None:
             lock_files(files, listbox)
         else:
             unlock_files(files, listbox)
+        log_action("Busy op finished", op="lock" if lock else "unlock", count=len(files or []))
 
     run_with_busy_dialog(parent, title, work, initial_status=f"{action}…")
 
 
 def refresh_file_status_busy(parent, files_listbox) -> None:
+    log_action("Busy op started", op="refresh_file_status")
+
     def work(set_status):
         set_status("Refreshing file status…")
 
@@ -309,6 +338,7 @@ def refresh_file_status_busy(parent, files_listbox) -> None:
             refresh_file_status_version(files_listbox)
 
         call_on_main_thread(apply)
+        log_action("Busy op finished", op="refresh_file_status")
 
     run_with_busy_dialog(
         parent, "Refreshing files", work, initial_status="Starting…"
@@ -325,11 +355,15 @@ def remove_patch_busy(parent, patch_info, on_success: Optional[Callable[[], None
         "Confirm Removal",
         f"Are you sure you want to remove patch '{patch_name}'?\nThis action cannot be undone.",
     ):
+        log_action("Remove patch cancelled", patch=patch_name)
         return
+
+    log_action("Busy op started", op="remove_patch", patch=patch_name)
 
     def work(set_status):
         set_status(f"Removing {patch_name}…")
         ok = remove_patch(patch_info, confirm=False)
+        log_action("Busy op finished", op="remove_patch", patch=patch_name, ok=ok)
         if ok and on_success is not None:
             call_on_main_thread(on_success)
 
@@ -407,6 +441,7 @@ def handle_drop_busy(parent, event, listbox) -> None:
     new_files = [f for f in files_to_process if f not in existing_files]
 
     if not new_files and not files_outside_svn:
+        log_action("Drag-drop no new files")
         messagebox.showinfo("Info", "No new files to add - all selected files are already in the list.")
         return
 
@@ -414,6 +449,13 @@ def handle_drop_busy(parent, event, listbox) -> None:
         if files_outside_svn:
             _show_files_outside_svn_error(files_outside_svn)
         return
+
+    log_action(
+        "Busy op started",
+        op="handle_drop",
+        accepted=len(new_files),
+        rejected=len(files_outside_svn),
+    )
 
     def work(set_status):
         set_status(f"Looking up {len(new_files)} file(s) in SVN…")
@@ -438,6 +480,7 @@ def handle_drop_busy(parent, event, listbox) -> None:
                 listbox.update_idletasks()
 
         call_on_main_thread(apply)
+        log_action("Busy op finished", op="handle_drop", accepted=len(new_files))
         if files_outside_svn:
             call_on_main_thread(lambda: _show_files_outside_svn_error(files_outside_svn))
 

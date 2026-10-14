@@ -4,7 +4,7 @@ from busy_dialog import run_with_busy_dialog
 from patch_generation import generate_patch
 from buttons_function import insert_next_version, deselect_all_rows, select_all_rows
 from patches_operations import refresh_patches, update_patch
-from config import load_config
+from config import load_config, log_action
 from db_handler import dbClass
 from tkinter import messagebox
 from profiles import get_profile
@@ -124,6 +124,13 @@ def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_s
         description = patch_description_entry.get("1.0", tk.END).strip()
         unlock = unlock_files.get()
         root = files_listbox.winfo_toplevel()
+        log_action(
+            "Generate patch clicked",
+            prefix=prefix,
+            version=version,
+            file_count=len(files),
+            unlock=unlock,
+        )
 
         def work(set_status):
             set_status("Generating patch…")
@@ -263,6 +270,14 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
         description = patch_description_entry.get("1.0", tk.END).strip()
         unlock = unlock_files.get()
         root = files_listbox.winfo_toplevel()
+        log_action(
+            "Update patch clicked",
+            patch_id=patch_id,
+            prefix=prefix,
+            version=version,
+            file_count=len(files),
+            unlock=unlock,
+        )
         # Defer remount until after this busy dialog closes so nested loads
         # get their own busy session instead of running inline on the main thread.
         pending = {}

@@ -6,7 +6,7 @@ import datetime as date
 import version_operation as vo
 from db_handler import dbClass
 from patch_utils import get_md5_checksum_batch, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files_batch
-from config import load_config, verify_config, log_error, log_success
+from config import load_config, verify_config, log_error, log_success, log_action
 
 def generate_patch(selected_files, patch_prefixe, patch_version, patch_description, unlock_files, status_callback=None):
     def status(msg):
@@ -22,6 +22,12 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         
         patch_version = patch_version.upper()
         patch_name = patch_prefixe + patch_version
+        log_action(
+            "Patch creation started",
+            patch=patch_name,
+            file_count=len(selected_files or []),
+            unlock=unlock_files,
+        )
         patch_version_folder = os.path.join(config.get("current_patches", "D:/cyframe/jtdev/Patches/Current"), patch_name)
 
         svn_path = config.get("svn_path")

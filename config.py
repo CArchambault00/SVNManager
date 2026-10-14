@@ -3,7 +3,7 @@ import json
 from tkinter import messagebox
 import datetime as date
 from profiles import get_profile
-from user_data import CONFIG_FILE, ERROR_LOG_FILE, SUCCESS_LOG_FILE
+from user_data import CONFIG_FILE, ERROR_LOG_FILE, SUCCESS_LOG_FILE, ACTIVITY_LOG_FILE
 
 neededVar = ["username"]  # Only username is required globally
 
@@ -82,6 +82,44 @@ def log_success(action: str, details: str = None):
     if details:
         message += f"\nDetails: {details}"
     _write_log(message, SUCCESS_LOG_FILE)
+
+def log_action(action: str, details: str = None, **fields):
+    """
+    Log a user or system activity to the activity log file.
+    Args:
+        action: Short name of the action (e.g., "View Diff requested")
+        details: Optional free-form details string
+        **fields: Optional key=value fields appended on following lines
+    """
+    message = f"ACTION - {action}"
+    if details:
+        message += f"\nDetails: {details}"
+    for key, value in fields.items():
+        if value is None:
+            continue
+        message += f"\n{key}={value}"
+    _write_log(message, ACTIVITY_LOG_FILE)
+
+def log_command(tool: str, argv, cwd=None, outcome=None, stderr=None):
+    """
+    Log an external command attempt/result to the activity log.
+    Avoids dumping large stdout; logs stderr snippet and outcome only.
+    """
+    try:
+        argv_str = " ".join(str(a) for a in argv) if argv is not None else ""
+    except TypeError:
+        argv_str = str(argv)
+    stderr_snip = None
+    if stderr:
+        text = str(stderr).strip()
+        stderr_snip = text[:500] + ("..." if len(text) > 500 else "")
+    log_action(
+        f"Command {tool}",
+        details=argv_str or None,
+        cwd=cwd,
+        outcome=outcome,
+        stderr=stderr_snip,
+    )
 
 def _write_log(message: str, log_file: str, include_timestamp: bool = True):
     """Internal function to write to log files with consistent formatting."""

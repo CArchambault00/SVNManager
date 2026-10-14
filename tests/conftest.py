@@ -25,18 +25,21 @@ def tmp_appdata(tmp_path, monkeypatch):
     profiles_file = str(data_dir / "svn_profiles.json")
     error_log = str(data_dir / "SVNManager_error.log")
     success_log = str(data_dir / "SVNManager_success.log")
+    activity_log = str(data_dir / "SVNManager_activity.log")
 
     monkeypatch.setattr("user_data.USER_DATA_DIR", str(data_dir))
     monkeypatch.setattr("user_data.CONFIG_FILE", config_file)
     monkeypatch.setattr("user_data.PROFILES_FILE", profiles_file)
     monkeypatch.setattr("user_data.ERROR_LOG_FILE", error_log)
     monkeypatch.setattr("user_data.SUCCESS_LOG_FILE", success_log)
+    monkeypatch.setattr("user_data.ACTIVITY_LOG_FILE", activity_log)
     monkeypatch.setattr("user_data._initialized", True)
     monkeypatch.setattr("user_data._migrated_sources", [])
 
     monkeypatch.setattr("config.CONFIG_FILE", config_file)
     monkeypatch.setattr("config.ERROR_LOG_FILE", error_log)
     monkeypatch.setattr("config.SUCCESS_LOG_FILE", success_log)
+    monkeypatch.setattr("config.ACTIVITY_LOG_FILE", activity_log)
     monkeypatch.setattr("profiles.PROFILES_FILE", profiles_file)
 
     return data_dir

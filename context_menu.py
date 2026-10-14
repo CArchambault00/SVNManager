@@ -16,7 +16,7 @@ from patches_operations import (
     refresh_patches, remove_patch, view_files_from_patch,
     build_patch, get_full_patch_info
 )
-from config import load_config, log_error
+from config import load_config, log_error, log_action
 from buttons_function import next_version, view_selected_file_native_diff, open_file_location
 from file_transfer import remove_and_return_selected_files, prune_locked_files_already_in_main
 
@@ -190,6 +190,8 @@ class ContextMenuManager:
 
     def _remove_from_patch(self, listbox):
         """Remove selected files and optionally return to locked files view."""
+        count = len(listbox.selection())
+        log_action("Context menu Remove selected files", count=count)
         locked_files_treeview = self._find_locked_files_treeview(listbox)
         remove_and_return_selected_files(listbox, locked_files_treeview)
 
@@ -202,6 +204,8 @@ class ContextMenuManager:
         selected_items = locked_files_treeview.selection()
         if not selected_items:
             return
+
+        log_action("Context menu Add to Patch", count=len(selected_items))
         
         # Get existing files to avoid duplicates
         existing_files = set()
@@ -236,6 +240,7 @@ class ContextMenuManager:
             item_values = treeview.item(selected[0], "values")
             # Get full patch info before calling the switch callback
             patch_name = item_values[0]
+            log_action("Context menu Modify patch", patch=patch_name)
             full_patch_info = get_full_patch_info(patch_name)
             if full_patch_info['NAME'][0] != config.get("patch_prefix", [""])[0]:
                 messagebox.showerror("Error", f"You cannot modify this patch with you current profile, change your profile to have\n{full_patch_info['NAME'][0]} as the patch prefix.")
@@ -260,6 +265,7 @@ class ContextMenuManager:
         selected = treeview.selection()
         if selected:
             patch_values = treeview.item(selected[0], "values")
+            log_action("Context menu Build patch", patch=patch_values[0])
             # Get full patch info using the patch name (first value)
             full_patch_info = get_full_patch_info(patch_values[0])
             if full_patch_info:

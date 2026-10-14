@@ -5,7 +5,7 @@ import oracledb
 from contextlib import contextmanager
 from datetime import datetime
 from tkinter import messagebox
-from config import log_error, load_config
+from config import log_error, load_config, log_action
 
 class DatabaseError(Exception):
     """Custom exception for database operations."""
@@ -135,6 +135,7 @@ class dbClass:
         config = load_config()
         dsn = config.get("dsn_name", "CYFRAMEPROD")
         instantclient_path = _find_instant_client()
+        log_action("Database connect started", dsn=dsn)
 
         try:
             self.conn = _connect_oracle(
@@ -142,6 +143,7 @@ class dbClass:
                 password="DEV_TOOL",
                 dsn=dsn,
             )
+            log_action("Database connect succeeded", dsn=dsn)
         except oracledb.Error as e:
             self.conn = None
             tns_admin = os.environ.get("TNS_ADMIN", "(not set)")
@@ -149,6 +151,7 @@ class dbClass:
                 "Database Error",
                 f"Failed to connect to the database. Application will not work properly.\n{e}",
             )
+            log_action("Database connect failed", dsn=dsn, details=str(e))
             log_error(f"Database Error: {e}")
             log_error(f"Date: {datetime.now()}")
             log_error(f"Instant Client Path: {instantclient_path}\n")

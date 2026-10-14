@@ -4,6 +4,7 @@ from typing import List, Optional, Callable
 from profiles import Profile, create_profile, update_profile, delete_profile, get_profile, list_profiles
 from db_handler import dbClass
 from svn_operations import is_svn_repo_root, get_relative_path
+from config import log_action
 import profiles
 class ProfileDialog:
     def __init__(self, parent):
@@ -348,6 +349,7 @@ class ProfileDialog:
         self.name_entry.configure(state="normal")
 
     def new_profile(self):
+        log_action("Profile form cleared for new profile")
         self.clear_form()
         self.profile_listbox.selection_clear(0, tk.END)
         self.dsn_name_var.set("CYFRAMEPROD")
@@ -362,10 +364,13 @@ class ProfileDialog:
         if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete profile '{profile_name}'?"):
             try:
                 delete_profile(profile_name)
+                log_action("Profile deleted", profile=profile_name)
                 self.refresh_profile_list()
                 self.clear_form()
             except Exception as e:
                 messagebox.showerror("Error", str(e))
+        else:
+            log_action("Profile delete cancelled", profile=profile_name)
 
     def select_profile(self):
         """Select the current profile as active"""
@@ -375,6 +380,7 @@ class ProfileDialog:
             return
             
         profile_name = self.profile_listbox.get(selection[0])
+        log_action("Profile Set Active clicked", profile=profile_name)
         self.result = profile_name
         self.dialog.destroy()
 
@@ -432,6 +438,7 @@ class ProfileDialog:
                     messagebox.showerror("Error", f"Profile '{name}' already exists")
                     return
                 create_profile(name, svn_path, [patch_prefix], current_patches, dsn_name)
+                log_action("Profile created", profile=name, prefix=patch_prefix, dsn=dsn_name)
             else:  # Update existing profile
                 if messagebox.askyesno("Confirm Modification", 
                                      f"Are you sure you want to modify the profile '{name}'?"):
@@ -440,7 +447,9 @@ class ProfileDialog:
                                  patch_prefix=[patch_prefix], 
                                  current_patches=current_patches, 
                                  dsn_name=dsn_name)
+                    log_action("Profile updated", profile=name, prefix=patch_prefix, dsn=dsn_name)
                 else:
+                    log_action("Profile update cancelled", profile=name)
                     return
             
             self.refresh_profile_list()
@@ -449,6 +458,7 @@ class ProfileDialog:
             # Ask if user wants to make this the active profile
             if messagebox.askyesno("Set Active Profile", 
                                  f"Do you want to make '{name}' the active profile?"):
+                log_action("Profile set active after save", profile=name)
                 self.result = name
                 self.dialog.destroy()
         except Exception as e:
@@ -456,6 +466,7 @@ class ProfileDialog:
 
 def show_profile_dialog(parent) -> Optional[str]:
     """Show the profile management dialog and return the selected profile name"""
+    log_action("Profile dialog opened")
     dialog = ProfileDialog(parent)
     parent.wait_window(dialog.dialog)  # Wait for dialog to close
     return dialog.result 

@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
-from config import load_config, get_unset_var, save_config
+from config import load_config, get_unset_var, save_config, log_action
 from dialog import set_username
 from profile_dialog import show_profile_dialog
 from profiles import get_profile, list_profiles
@@ -70,12 +70,14 @@ def update_profile_menu(profile_menu, active_profile, menu_bar):
 
 def select_profile(config_menu, menu_bar, profile_menu, menu_manager):
     """Handle profile selection"""
+    log_action("Manage Profiles opened")
     profile_name = show_profile_dialog(menu_bar.master)
     if profile_name:
         config = load_config()
         old_profile = config.get("active_profile")
         config["active_profile"] = profile_name
         save_config(config)
+        log_action("Active profile set", profile=profile_name, previous=old_profile)
         
         # Update menu labels based on new profile
         unset_var = get_unset_var()
@@ -131,22 +133,30 @@ def initialize_native_topbar(root, app_version):
     help_menu = tk.Menu(menu_bar, tearoff=0)
     help_menu.add_command(
         label="About",
-        command=lambda: messagebox.showinfo("About", f"SVN Manager v{app_version}\n\n")
+        command=lambda: (
+            log_action("Help About opened"),
+            messagebox.showinfo("About", f"SVN Manager v{app_version}\n\n"),
+        )
     )
     
     help_menu.add_command(
         label="How to use",
-        command=lambda: messagebox.showinfo("How to use", 
+        command=lambda: (
+            log_action("Help How to use opened"),
+            messagebox.showinfo("How to use", 
             "To use this application, you must:\n\n"
             "1. Set your username in the Config menu\n"
             "2. Create a profile in the Profile menu\n"
             "3. Select a profile to work with\n\n"
-            "The application will remember your selected profile even after closing.")
+            "The application will remember your selected profile even after closing."),
+        )
     )
 
     help_menu.add_command(
         label="Patch version",
-        command=lambda: messagebox.showinfo("Patch version", 
+        command=lambda: (
+            log_action("Help Patch version opened"),
+            messagebox.showinfo("Patch version", 
             "Patch must follow the format 'Major.Minor.Patch-*'\n" \
             "Following those patterns (Can be combined):\n" \
             "Web changes :\n" \
@@ -157,12 +167,15 @@ def initialize_native_topbar(root, app_version):
             "*-S0 -> min. logical Change; New Label; System Parameter; New type report.\n" \
             "*-S1 -> new function, new param\n" \
             "*-S2 -> add Param; delete Param; alter table; change column size;\n" \
-            "")
+            ""),
+        )
     )
 
     help_menu.add_command(
         label="Profile",
-        command=lambda: messagebox.showinfo("Profile", 
+        command=lambda: (
+            log_action("Help Profile opened"),
+            messagebox.showinfo("Profile", 
             "Profiles are used to manage different projects\n\n"
             "To create a new profile:\n"
             "1. Click on Profile at the top left of SVNManager and select 'Manage Profiles...'\n"
@@ -173,7 +186,8 @@ def initialize_native_topbar(root, app_version):
             "To switch between profiles:\n"
             "1. Click on Profile at the top left of SVNManager and select 'Manage Profiles...'\n"
             "2. Choose the profile you want to switch to and click 'Set Active'.\n"
-            "3. The application will reload with the selected profile's settings.")
+            "3. The application will reload with the selected profile's settings."),
+        )
     )
 
     menu_bar.add_cascade(label="Help", menu=help_menu)
@@ -184,7 +198,10 @@ def initialize_native_topbar(root, app_version):
         command=lambda: reset_current_menu(root)
     )
     
-    menu_bar.add_cascade(label="Exit", command=root.quit)
+    menu_bar.add_cascade(
+        label="Exit",
+        command=lambda: (log_action("Application exit requested"), root.quit()),
+    )
     
     # Add active profile display after Exit
     if active_profile:
@@ -213,6 +230,7 @@ def reset_current_menu(root):
         return
         
     current_menu = state_manager.current_menu
+    log_action("Reset current menu", menu=current_menu)
     if current_menu == "patch":
         # Clear patch state and rebuild menu
         state_manager.clear_state("patch")
