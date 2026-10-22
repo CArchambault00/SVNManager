@@ -185,6 +185,28 @@ class dbClass:
         cursor.execute(sql, params or {})
         cursor.close()
 
+    def get_cyra_release_links(self):
+        """Cyra releases with a dependency patch linked (CYRA_RELEASE)."""
+        sql = ("SELECT VERSION, REQUIRES_PATCH, REQUIRES_PATCH_NAME FROM CYRA_RELEASE "
+               "WHERE REQUIRES_PATCH IS NOT NULL")
+        return self.execute_query(sql)
+
+    def set_cyra_release_link(self, version, patch_number, patch_name, svn_path):
+        """Link a Cyra release to its required patch (insert or update)."""
+        sql = """
+        MERGE INTO CYRA_RELEASE t
+        USING (SELECT :v1 AS VERSION FROM DUAL) s ON (t.VERSION = s.VERSION)
+        WHEN MATCHED THEN UPDATE SET REQUIRES_PATCH = :p1, REQUIRES_PATCH_NAME = :n1
+        WHEN NOT MATCHED THEN INSERT (VERSION, SVN_PATH, REQUIRES_PATCH, REQUIRES_PATCH_NAME, STATUS)
+        VALUES (:v2, :sp, :p2, :n2, 'released')
+        """
+        self.execute_non_query(sql, {
+            'v1': version, 'v2': version,
+            'p1': int(patch_number), 'p2': int(patch_number),
+            'n1': patch_name, 'n2': patch_name,
+            'sp': svn_path,
+        })
+
     def get_folder_list(self):
         sql = "SELECT PATH, DESCRIPTION, FOLDER_TYPE, SOFT_PATH, DEFAULT_PREFIX FROM FOLDER ORDER BY FOLDER_TYPE, PATH"
         return self.execute_query(sql)

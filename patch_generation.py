@@ -7,6 +7,14 @@ import version_operation as vo
 from db_handler import dbClass
 from patch_utils import get_md5_checksum_batch, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files_batch
 from config import load_config, verify_config, log_error, log_success, log_action
+from cyra_release import (
+    classify_files as classify_cyra_files,
+    normalize_rel as cyra_normalize_rel,
+    build_cyra_plan,
+    apply_version_bump as apply_cyra_version_bump,
+    build_and_commit_release as build_and_commit_cyra_release,
+    record_cyra_link,
+)
 
 def generate_patch(selected_files, patch_prefixe, patch_version, patch_description, unlock_files, status_callback=None):
     def status(msg):
@@ -33,7 +41,14 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         svn_path = config.get("svn_path")
         username = config.get("username")
 
-        if not '-' in patch_version or patch_version.count('-') != 1 or patch_version.split('-')[1] == '':
+        # Cyra release automation: cyra/ files ship a Cyra release. A patch
+        # is created only when web/db files are present (or no cyra/ at all).
+        groups = classify_cyra_files(selected_files)
+        has_cyra = bool(groups["cyra"])
+        create_patch = bool(groups["web"] or groups["db"]) or not has_cyra
+        cyra_plan = None
+
+        if create_patch and (not '-' in patch_version or patch_version.count('-') != 1 or patch_version.split('-')[1] == ''):
             messagebox.showerror("Error", "Invalid patch version format! Must contain '-*'\n" \
             "Following those patterns (Can be combined):\n" \
             "Web changes :\n" \
@@ -47,25 +62,66 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
             "")
             return
 
-        if not patch_version:
+        if create_patch and not patch_version:
             messagebox.showerror("Error", "Patch version is required!")
             return
-        
-        if not patch_description:
+
+        if create_patch and not patch_description:
             messagebox.showerror("Error", "Patch description is required!")
             return
-        
+
         if not selected_files or len(selected_files) == 0:
             if not messagebox.askyesno("No Files Selected", "No files selected. Do you want to create an empty patch?"):
                 return
 
-        parsed_version = vo.parse_version(patch_version)
-        if not parsed_version:
-            messagebox.showerror("Error", "Invalid patch version format! Expected major.minor.revision-suffix\n"
-                                 "Example: 1.0.0956-W0")
+        parsed_version = None
+        if create_patch:
+            parsed_version = vo.parse_version(patch_version)
+            if not parsed_version:
+                messagebox.showerror("Error", "Invalid patch version format! Expected major.minor.revision-suffix\n"
+                                     "Example: 1.0.0956-W0")
+                return
+            vo.set_current_version(parsed_version)
+
+        if has_cyra:
+            wc_root_plan = get_wc_root(svn_path)
+            cyra_plan = build_cyra_plan(
+                db, wc_root_plan,
+                patch_name=patch_name if create_patch else None,
+                patch_number=parsed_version.revision if create_patch else None,
+            )
+            patch_line = f"Create patch {patch_name}" if create_patch else "No patch (no web/db files)"
+            summary = (
+                f"Files: {len(groups['cyra'])} Cyra, {len(groups['web'])} web, "
+                f"{len(groups['db'])} database, {len(groups['other'])} other.\n\n"
+                f"{patch_line}\n"
+                f"Create Cyra release {cyra_plan['release_version']} "
+                f"(cyra/VERSION + core/__init__.py updated, built and committed to CyraReleases SVN)\n"
+                f"Link: Cyra {cyra_plan['release_version']} requires patch "
+                f"{cyra_plan['link_patch_name']} ({cyra_plan['link_source']})\n\nContinue?"
+            )
+            if not messagebox.askyesno("Cyra release", summary):
+                return
+            status("Updating Cyra version files…")
+            for rel in apply_cyra_version_bump(wc_root_plan, cyra_plan["release_version"], username):
+                if not any(cyra_normalize_rel(f) == rel for f in selected_files):
+                    selected_files.append(rel)
+
+        if has_cyra and not create_patch:
+            # Cyra only: commit the files, build + commit the release, link it
+            # to the previous release's patch. No patch header/folder.
+            status(f"Committing {len(selected_files)} file(s) to SVN…")
+            commit_files(selected_files, unlock_files)
+            result = build_and_commit_cyra_release(
+                wc_root_plan, cyra_plan, username, patch_description, status_callback=status)
+            record_cyra_link(db, cyra_plan)
+            details = (f"Cyra {cyra_plan['release_version']} release created "
+                       f"(SVN r{result['revision']}), linked to patch {cyra_plan['link_patch_name']} "
+                       f"({cyra_plan['link_source']}).\nNo patch created (no web/db files).")
+            log_success("Cyra Release Creation", details)
+            messagebox.showinfo("Info", details)
             return
-        vo.set_current_version(parsed_version)
-        
+
         db.conn.begin()
 
         patchAlreadyExists = db.check_patch_exists(patch_prefixe, patch_version.split("-")[0])
@@ -139,8 +195,24 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         status("Finalizing…")
         db.conn.commit()
         success_details = f"Patch: {patch_name}\nFiles: {len(selected_files)}\nDescription: {patch_description}"
+
+        release_note = ""
+        if cyra_plan is not None:
+            # Patch is committed at this point; a release failure must not
+            # roll it back. The link can be fixed on the Cyra Releases page.
+            try:
+                result = build_and_commit_cyra_release(
+                    wc_root, cyra_plan, username, patch_description, status_callback=status)
+                record_cyra_link(db, cyra_plan)
+                release_note = (f"\nCyra {cyra_plan['release_version']} release built and committed "
+                                f"(SVN r{result['revision']}), linked to patch {patch_name}.")
+            except Exception as rel_err:
+                release_note = (f"\n\nWARNING: the patch was created, but the Cyra release failed:\n{rel_err}\n"
+                                "Rebuild the release manually, or link it on the Cyra Releases page.")
+                log_error(f"Cyra release after patch {patch_name} failed: {rel_err}", include_stack=True)
+            success_details += release_note
         log_success("Patch Creation", success_details)
-        messagebox.showinfo("Info", "Patch created successfully!")
+        messagebox.showinfo("Info", "Patch created successfully!" + release_note)
     except Exception as e:
         try:
             if db.conn is not None:

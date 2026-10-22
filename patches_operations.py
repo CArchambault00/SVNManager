@@ -17,6 +17,15 @@ from version_operation import parse_version
 import subprocess
 import shutil
 from dialog import display_patch_files
+from cyra_release import (
+    classify_files as classify_cyra_files,
+    normalize_rel as cyra_normalize_rel,
+    build_update_plan as build_cyra_update_plan,
+    find_release_for_patch as find_cyra_release_for_patch,
+    apply_version_bump as apply_cyra_version_bump,
+    build_and_commit_release as build_and_commit_cyra_release,
+    record_cyra_link,
+)
 
 patch_info_dict = {}
 
@@ -171,6 +180,41 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
                                      "No files selected. Do you want to modify the patch to have no files?"):
                 return
 
+        # Cyra release automation (modification): Cyra files in the updated
+        # patch rebuild the Cyra release already linked to this patch (same
+        # version, no bump), or create the next release linked to it.
+        cyra_groups = classify_cyra_files(selected_files)
+        has_cyra = bool(cyra_groups["cyra"])
+        cyra_plan = None
+        cyra_note = ""
+        wc_root_pre = get_wc_root(svn_path)
+        if has_cyra:
+            cyra_plan = build_cyra_update_plan(db, wc_root_pre, patch_name)
+            action = (f"Rebuild Cyra release {cyra_plan['release_version']} (same version, "
+                      "committed over the existing release in CyraReleases SVN)"
+                      if cyra_plan.get("rebuild") else
+                      f"Create Cyra release {cyra_plan['release_version']} "
+                      "(cyra/VERSION + core/__init__.py updated, built and committed to CyraReleases SVN)")
+            summary = (
+                f"Files: {len(cyra_groups['cyra'])} Cyra, {len(cyra_groups['web'])} web, "
+                f"{len(cyra_groups['db'])} database, {len(cyra_groups['other'])} other.\n\n"
+                f"Update patch {patch_name}\n{action}\n"
+                f"Link: Cyra {cyra_plan['release_version']} requires patch "
+                f"{cyra_plan['link_patch_name']} ({cyra_plan['link_source']})\n\nContinue?"
+            )
+            if not messagebox.askyesno("Cyra release", summary):
+                return
+            if not cyra_plan.get("rebuild"):
+                status("Updating Cyra version files…")
+                for rel in apply_cyra_version_bump(wc_root_pre, cyra_plan["release_version"], username):
+                    if not any(cyra_normalize_rel(f) == rel for f in selected_files):
+                        selected_files.append(rel)
+        else:
+            linked = find_cyra_release_for_patch(db, patch_name)
+            if linked is not None:
+                cyra_note = (f"\nNote: Cyra {linked['VERSION']} is linked to this patch, but no Cyra "
+                             "files were included -- the release was NOT rebuilt.")
+
         status("Backing up extra patch files…")
         # Preserve manually-added files (e.g. DB scripts dropped into the patch folder)
         # that are not part of the locked/unlocked SVN file list.
@@ -279,9 +323,25 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         # Switch to modify patch menu with updated info
         switch_to_modify_patch_menu(full_patch_info)
         
+        release_note = ""
+        if cyra_plan is not None:
+            # Patch update is committed at this point; a release failure must
+            # not roll it back. The link can be fixed on the Cyra Releases page.
+            try:
+                result = build_and_commit_cyra_release(
+                    wc_root, cyra_plan, username, patch_description, status_callback=status)
+                record_cyra_link(db, cyra_plan)
+                verb = "rebuilt" if cyra_plan.get("rebuild") else "built"
+                release_note = (f"\nCyra {cyra_plan['release_version']} release {verb} and committed "
+                                f"(SVN r{result['revision']}), linked to patch {patch_name}.")
+            except Exception as rel_err:
+                release_note = (f"\n\nWARNING: the patch was updated, but the Cyra release failed:\n{rel_err}\n"
+                                "Rebuild the release manually, or link it on the Cyra Releases page.")
+                log_error(f"Cyra release after patch update {patch_name} failed: {rel_err}", include_stack=True)
+
         success_details = f"Patch: {patch_name}\nFiles: {len(selected_files)}\nDescription: {patch_description}"
-        log_success("Patch Update", success_details)
-        tk.messagebox.showinfo("Success", "Patch updated successfully!")
+        log_success("Patch Update", success_details + release_note)
+        tk.messagebox.showinfo("Success", "Patch updated successfully!" + release_note + cyra_note)
         
     except Exception as e:
         db.conn.rollback()
