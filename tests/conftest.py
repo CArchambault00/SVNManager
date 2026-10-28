@@ -177,7 +177,9 @@ class FakeDB:
         return patch_id
 
     def get_folder_id(self, soft_path: str) -> int:
-        return self.folders.get(soft_path, 1)
+        if soft_path not in self.folders:
+            raise ValueError(f"Folder ID for '{soft_path}' not found.")
+        return self.folders[soft_path]
 
     def create_patch_detail(self, patch_id, fake_path, clean_path, filename, revision, folder_id):
         file_id = len(self.patch_files.get(patch_id, [])) + 1

@@ -2,8 +2,10 @@
 
 Rules (decided with the Cyra installer gate):
   * Selected files under cyra/ mean the change ships a new Cyra release.
-  * cyra/ + webpage/ or Database/ files -> a patch is created as usual AND
-    a Cyra release is built; the release is linked to that new patch.
+  * cyra/ files are committed to SVN and packaged under CyraReleases only.
+    They are never recorded in the Web/DB patch (no FOLDER row for cyra).
+  * cyra/ + webpage/ or Database/ files -> a patch is created from web/db
+    only AND a Cyra release is built; the release is linked to that new patch.
   * cyra/ only (no webpage/Database/)   -> no patch; a Cyra release is
     built and linked to the patch the PREVIOUS Cyra release was linked to
     (customers then need nothing new before installing it).
@@ -43,15 +45,26 @@ def normalize_rel(path):
     """WC-relative path with the classification root first.
 
     Selected paths may carry a scope prefix (e.g. 'jtdev/cyra/...' when the
-    profile svn_path is a subfolder); strip everything before the first
+    profile svn_path is a subfolder); strip everything before the earliest
     known root segment.
+
+    Earliest marker wins so cyra/webpage/... and cyra/database/... stay under
+    cyra/ (never reclassified as webpage/Database for the Web/DB patch).
     """
     rel = str(path).replace("\\", "/").lstrip("/")
+    best_idx = None
     for marker in ROOT_MARKERS:
         idx = rel.find(marker)
-        if idx > 0:
-            return rel[idx:]
+        if idx >= 0 and (best_idx is None or idx < best_idx):
+            best_idx = idx
+    if best_idx is not None and best_idx > 0:
+        return rel[best_idx:]
     return rel
+
+
+def is_cyra_path(path):
+    """True when the path is under the cyra/ tree (after scope strip)."""
+    return normalize_rel(path).startswith("cyra/")
 
 
 def classify_files(selected_files):
@@ -68,6 +81,15 @@ def classify_files(selected_files):
         else:
             groups["other"].append(f)
     return groups
+
+
+def files_for_patch_package(selected_files):
+    """Paths that belong in the Web/DB patch package (excludes cyra/).
+
+    Cyra sources commit with the selection and ship via CyraReleases; they
+    must not hit FOLDER/PATCH_DETAIL or the patch folder copy.
+    """
+    return [f for f in (selected_files or []) if not is_cyra_path(f)]
 
 
 def parse_semver(text):

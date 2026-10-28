@@ -887,11 +887,12 @@ def setup_gui() -> tk.Tk:
     if getattr(sys, 'frozen', False):  # Running as a PyInstaller bundle
         bundle_dir = sys._MEIPASS
     else:
-        bundle_dir = os.path.abspath(".")
+        # Script dir — works when launched from repo root or Tools/SVN_manager
+        bundle_dir = os.path.dirname(os.path.abspath(__file__))
 
     icon_path = os.path.join(bundle_dir, "SVNManagerIcon.ico")
-        
-    root.iconbitmap(icon_path)
+    if os.path.isfile(icon_path):
+        root.iconbitmap(icon_path)
     root.title("SVN Manager")
     root.geometry("1000x600")
     configure_treeview_style(root)

@@ -90,9 +90,9 @@ def update_env(seeded_patch, sample_config, mock_db, mock_messagebox, monkeypatc
     return calls
 
 
-def test_update_patch_with_cyra_files_rebuilds_release(update_env, seeded_patch):
+def test_update_patch_with_cyra_files_rebuilds_release(update_env, seeded_patch, mock_db):
     po.update_patch(
-        selected_files=["cyra/core/a.py"],
+        selected_files=["cyra/core/a.py", "webpage/pages/a.asp"],
         patch_id=seeded_patch["PATCH_ID"],
         patch_version_prefixe="S",
         patch_version_entry="1.0.0200-W0",
@@ -102,3 +102,9 @@ def test_update_patch_with_cyra_files_rebuilds_release(update_env, seeded_patch)
     )
     assert update_env["build"] == "1.1.0"
     assert update_env["link"] == "1.1.0"
+    detail_names = [f["NAME"] for f in mock_db.patch_files[seeded_patch["PATCH_ID"]]]
+    assert detail_names == ["a.asp"]
+    committed = po.commit_files.call_args[0][0]
+    assert "cyra/core/a.py" in committed
+    copied = po.create_patch_files_batch.call_args[0][0]
+    assert copied == ["webpage/pages/a.asp"]

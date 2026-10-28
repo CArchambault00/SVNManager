@@ -10,6 +10,8 @@ from config import load_config, verify_config, log_error, log_success, log_actio
 from cyra_release import (
     classify_files as classify_cyra_files,
     normalize_rel as cyra_normalize_rel,
+    is_cyra_path,
+    files_for_patch_package,
     build_cyra_plan,
     apply_version_bump as apply_cyra_version_bump,
     build_and_commit_release as build_and_commit_cyra_release,
@@ -133,8 +135,10 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
 
         status(f"Committing {len(selected_files)} file(s) to SVN…")
         commit_files(selected_files, unlock_files)
-        
-        
+
+        # Web/DB patch package only — cyra/ is committed above and ships via CyraReleases.
+        patch_files = files_for_patch_package(selected_files)
+
         status("Creating patch header…")
         patch_id = db.create_patch_header(patch_prefixe, patch_version, patch_description, username, 
                                         False, parsed_version.major, parsed_version.minor, parsed_version.revision)
@@ -148,9 +152,9 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         # Process files in batches for better performance
         BATCH_SIZE = 50
         folder_id_cache = {}
-        total = len(selected_files)
-        for i in range(0, len(selected_files), BATCH_SIZE):
-            batch = selected_files[i:i + BATCH_SIZE]
+        total = len(patch_files)
+        for i in range(0, len(patch_files), BATCH_SIZE):
+            batch = patch_files[i:i + BATCH_SIZE]
             status(f"Recording file details ({min(i + BATCH_SIZE, total)}/{total})…")
             
             # Get file HEAD revisions in batch
@@ -159,8 +163,10 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
             # Calculate MD5 checksums in batch
             md5_checksums = get_md5_checksum_batch([f"{wc_root}/{file}" for file in batch])
             
-            # Create patch details in batch
+            # Create patch details in batch (cyra/ never recorded — CyraReleases only)
             for file in batch:
+                if is_cyra_path(file):
+                    continue
                 fake_path = '$/Projects/SVN/' + file
                 filename = os.path.basename(file)
                 clean_path = file.replace(filename, "")
@@ -170,6 +176,8 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
                     soft_path = "/".join(parts[:4])
                 else:
                     soft_path = "/".join(parts[:1])
+                if soft_path == "cyra":
+                    continue
                 if soft_path not in folder_id_cache:
                     folder_id_cache[soft_path] = db.get_folder_id(soft_path)
                 folder_id = folder_id_cache[soft_path]
@@ -180,21 +188,26 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
 
         # Create patch files in optimized batches
         status("Copying files into patch folder…")
-        create_patch_files_batch(selected_files, svn_path, patch_version_folder)
+        create_patch_files_batch(patch_files, svn_path, patch_version_folder)
         
         # Create supporting files
         status("Writing ReadMe / MainSQL / depend…")
         create_readme_file(patch_version_folder, patch_name, username, 
-                         time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)
+                         time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, patch_files)
         
-        create_main_sql_file(patch_version_folder, selected_files, version_info=(parsed_version.major, parsed_version.minor, parsed_version.revision), application_id=application_id)
+        create_main_sql_file(patch_version_folder, patch_files, version_info=(parsed_version.major, parsed_version.minor, parsed_version.revision), application_id=application_id)
         
         setup_patch_folder(patch_version_folder)
         create_depend_txt(db, patch_version_folder, patch_id)
         
         status("Finalizing…")
         db.conn.commit()
-        success_details = f"Patch: {patch_name}\nFiles: {len(selected_files)}\nDescription: {patch_description}"
+        success_details = (
+            f"Patch: {patch_name}\n"
+            f"Patch files: {len(patch_files)}\n"
+            f"Committed files: {len(selected_files)}\n"
+            f"Description: {patch_description}"
+        )
 
         release_note = ""
         if cyra_plan is not None:

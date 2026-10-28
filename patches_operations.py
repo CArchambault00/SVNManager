@@ -20,6 +20,8 @@ from dialog import display_patch_files
 from cyra_release import (
     classify_files as classify_cyra_files,
     normalize_rel as cyra_normalize_rel,
+    is_cyra_path,
+    files_for_patch_package,
     build_update_plan as build_cyra_update_plan,
     find_release_for_patch as find_cyra_release_for_patch,
     apply_version_bump as apply_cyra_version_bump,
@@ -241,6 +243,9 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         status(f"Committing {len(selected_files)} file(s) to SVN…")
         commit_files(selected_files,unlock_files)
 
+        # Web/DB patch package only — cyra/ is committed above and ships via CyraReleases.
+        patch_files = files_for_patch_package(selected_files)
+
         wc_root = get_wc_root(svn_path)
 
         db.conn.begin()
@@ -256,14 +261,16 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
 
         BATCH_SIZE = 50
         folder_id_cache = {}
-        total = len(selected_files)
-        for i in range(0, len(selected_files), BATCH_SIZE):
-            batch = selected_files[i:i + BATCH_SIZE]
+        total = len(patch_files)
+        for i in range(0, len(patch_files), BATCH_SIZE):
+            batch = patch_files[i:i + BATCH_SIZE]
             status(f"Recording file details ({min(i + BATCH_SIZE, total)}/{total})…")
             revisions = get_file_head_revision_batch(batch)
             md5_checksums = get_md5_checksum_batch([f"{wc_root}/{file}" for file in batch])
 
             for file in batch:
+                if is_cyra_path(file):
+                    continue
                 fake_path = '$/Projects/SVN/' + file
                 filename = os.path.basename(file)
                 clean_path = file.replace(filename, "")
@@ -273,6 +280,8 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
                     soft_path = "/".join(parts[:4])
                 else:
                     soft_path = "/".join(parts[:1])
+                if soft_path == "cyra":
+                    continue
                 if soft_path not in folder_id_cache:
                     folder_id_cache[soft_path] = db.get_folder_id(soft_path)
                 folder_id = folder_id_cache[soft_path]
@@ -285,13 +294,13 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
                     db.set_md5(patch_id, file_id, md5checksum)
             
         status("Copying files into patch folder…")
-        create_patch_files_batch(selected_files, svn_path, patch_version_folder)
+        create_patch_files_batch(patch_files, svn_path, patch_version_folder)
         
         status("Writing ReadMe / MainSQL / depend…")
         create_readme_file(patch_version_folder, patch_name, username, 
-                         time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, selected_files)
+                         time.strftime("%Y-%m-%d %H:%M:%S"), patch_description, patch_files)
         
-        create_main_sql_file(patch_version_folder, selected_files,
+        create_main_sql_file(patch_version_folder, patch_files,
                            patch_name=patch_name)
         
         setup_patch_folder(patch_version_folder)

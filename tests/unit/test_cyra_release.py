@@ -7,6 +7,7 @@ import pytest
 
 from cyra_release import (
     classify_files,
+    files_for_patch_package,
     gate_file_json,
     missing_release_files,
     normalize_rel,
@@ -83,6 +84,17 @@ def test_normalize_strips_scope_prefix():
     assert normalize_rel("webpage/a.asp") == "webpage/a.asp"
 
 
+def test_normalize_keeps_cyra_over_nested_webpage_or_database():
+    # Real WC paths under cyra/ that also contain webpage/ or database/
+    assert normalize_rel("cyra/webpage/CMACentral/CustomerAI/ai-assistant.js") == (
+        "cyra/webpage/CMACentral/CustomerAI/ai-assistant.js"
+    )
+    assert normalize_rel("cyra/database/CF_AI/Scripts/seed.sql") == (
+        "cyra/database/CF_AI/Scripts/seed.sql"
+    )
+    assert normalize_rel("jtdev/cyra/webpage/x.js") == "cyra/webpage/x.js"
+
+
 def test_classify_files():
     groups = classify_files([
         "cyra/core/a.py",
@@ -95,6 +107,37 @@ def test_classify_files():
     assert len(groups["web"]) == 1
     assert len(groups["db"]) == 1
     assert len(groups["other"]) == 1
+
+
+def test_classify_cyra_webpage_mirror_is_cyra_not_web():
+    groups = classify_files([
+        "cyra/webpage/CMACentral/CustomerAI/ai-assistant.js",
+        "webpage/CMACentral/CustomerAI/ai-assistant.js",
+        "cyra/database/CF_AI/Scripts/seed.sql",
+        "Database/CF_AI/Scripts/seed.sql",
+    ])
+    assert groups["cyra"] == [
+        "cyra/webpage/CMACentral/CustomerAI/ai-assistant.js",
+        "cyra/database/CF_AI/Scripts/seed.sql",
+    ]
+    assert groups["web"] == ["webpage/CMACentral/CustomerAI/ai-assistant.js"]
+    assert groups["db"] == ["Database/CF_AI/Scripts/seed.sql"]
+
+
+def test_files_for_patch_package_excludes_cyra():
+    selected = [
+        "cyra/core/a.py",
+        "jtdev/cyra/scripts/b.ps1",
+        "cyra/webpage/CMACentral/CustomerAI/ai-assistant.js",
+        "webpage/x.asp",
+        "Database/CMATC/SP/P.PKB",
+        "Tools/other.txt",
+    ]
+    assert files_for_patch_package(selected) == [
+        "webpage/x.asp",
+        "Database/CMATC/SP/P.PKB",
+        "Tools/other.txt",
+    ]
 
 
 def test_pick_release_version_bumps_minor():

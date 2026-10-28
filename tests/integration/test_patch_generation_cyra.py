@@ -88,7 +88,13 @@ def test_cyra_only_creates_release_without_patch(cyra_env, patch_env, mock_db, m
 
 def test_cyra_and_web_creates_patch_and_release(cyra_env, patch_env, mock_db, mock_messagebox):
     generate_patch(
-        selected_files=["cyra/core/a.py", "webpage/a.asp"],
+        selected_files=[
+            "cyra/core/a.py",
+            # nested marker must stay Cyra (regression: was misclassified as webpage)
+            "cyra/webpage/CMACentral/CustomerAI/ai-assistant.js",
+            "webpage/a.asp",
+            "Database/CF_AI/Scripts/seed.sql",
+        ],
         patch_prefixe="S",
         patch_version="1.0.0101-W0",
         patch_description="Test patch",
@@ -97,6 +103,16 @@ def test_cyra_and_web_creates_patch_and_release(cyra_env, patch_env, mock_db, mo
     assert any(p["NAME"].startswith("S1.0.0101") for p in mock_db.patches.values())
     assert cyra_env["build"] == "1.2.0"
     assert cyra_env["link"] == "S1.0.1085-W1S1"
+    # cyra/ is committed + released, but never recorded in the Web/DB patch
+    patch_id = next(pid for pid, p in mock_db.patches.items() if p["NAME"].startswith("S1.0.0101"))
+    detail_names = [f["NAME"] for f in mock_db.patch_files[patch_id]]
+    assert detail_names == ["a.asp", "seed.sql"]
+    committed = patch_generation.commit_files.call_args[0][0]
+    assert "cyra/core/a.py" in committed
+    assert "cyra/webpage/CMACentral/CustomerAI/ai-assistant.js" in committed
+    assert "webpage/a.asp" in committed
+    copied = patch_generation.create_patch_files_batch.call_args[0][0]
+    assert copied == ["webpage/a.asp", "Database/CF_AI/Scripts/seed.sql"]
     info_text = str(mock_messagebox.showinfo.call_args)
     assert "Cyra 1.2.0" in info_text
 
