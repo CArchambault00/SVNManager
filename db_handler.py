@@ -192,20 +192,35 @@ class dbClass:
         return self.execute_query(sql)
 
     def set_cyra_release_link(self, version, patch_number, patch_name, svn_path):
-        """Link a Cyra release to its required patch (insert or update)."""
-        sql = """
-        MERGE INTO CYRA_RELEASE t
-        USING (SELECT :v1 AS VERSION FROM DUAL) s ON (t.VERSION = s.VERSION)
-        WHEN MATCHED THEN UPDATE SET REQUIRES_PATCH = :p1, REQUIRES_PATCH_NAME = :n1
-        WHEN NOT MATCHED THEN INSERT (VERSION, SVN_PATH, REQUIRES_PATCH, REQUIRES_PATCH_NAME, STATUS)
-        VALUES (:v2, :sp, :p2, :n2, 'released')
+        """Link a Cyra release to its required patch (insert or update).
+
+        Prefer UPDATE (row often already inserted by the hourly poller), then
+        INSERT when the catalogue row is still missing. Avoids MERGE bind
+        quirks and matches DoSetReleasePatch on CyraReleases.asp.
         """
-        self.execute_non_query(sql, {
-            'v1': version, 'v2': version,
-            'p1': int(patch_number), 'p2': int(patch_number),
-            'n1': patch_name, 'n2': patch_name,
+        patch_key = int(patch_number)
+        params = {
+            'v': version,
+            'p': patch_key,
+            'n': patch_name,
             'sp': svn_path,
-        })
+        }
+        self._require_connection()
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE CYRA_RELEASE SET REQUIRES_PATCH = :p, REQUIRES_PATCH_NAME = :n, "
+                "SVN_PATH = NVL(SVN_PATH, :sp) WHERE VERSION = :v",
+                params,
+            )
+            if cursor.rowcount == 0:
+                cursor.execute(
+                    "INSERT INTO CYRA_RELEASE (VERSION, SVN_PATH, REQUIRES_PATCH, "
+                    "REQUIRES_PATCH_NAME, STATUS) VALUES (:v, :sp, :p, :n, 'released')",
+                    params,
+                )
+        finally:
+            cursor.close()
 
     def get_folder_list(self):
         sql = "SELECT PATH, DESCRIPTION, FOLDER_TYPE, SOFT_PATH, DEFAULT_PREFIX FROM FOLDER ORDER BY FOLDER_TYPE, PATH"

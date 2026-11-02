@@ -16,6 +16,7 @@ from cyra_release import (
     apply_version_bump as apply_cyra_version_bump,
     build_and_commit_release as build_and_commit_cyra_release,
     record_cyra_link,
+    ensure_requires_cyra_comment,
 )
 
 def generate_patch(selected_files, patch_prefixe, patch_version, patch_description, unlock_files, status_callback=None):
@@ -139,6 +140,11 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
         # Web/DB patch package only — cyra/ is committed above and ships via CyraReleases.
         patch_files = files_for_patch_package(selected_files)
 
+        if cyra_plan is not None:
+            patch_description = ensure_requires_cyra_comment(
+                patch_description, cyra_plan["release_version"]
+            )
+
         status("Creating patch header…")
         patch_id = db.create_patch_header(patch_prefixe, patch_version, patch_description, username, 
                                         False, parsed_version.major, parsed_version.minor, parsed_version.revision)
@@ -211,18 +217,28 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
 
         release_note = ""
         if cyra_plan is not None:
-            # Patch is committed at this point; a release failure must not
+            # Patch is committed at this point; a release/link failure must not
             # roll it back. The link can be fixed on the Cyra Releases page.
             try:
                 result = build_and_commit_cyra_release(
                     wc_root, cyra_plan, username, patch_description, status_callback=status)
-                record_cyra_link(db, cyra_plan)
-                release_note = (f"\nCyra {cyra_plan['release_version']} release built and committed "
-                                f"(SVN r{result['revision']}), linked to patch {patch_name}.")
             except Exception as rel_err:
                 release_note = (f"\n\nWARNING: the patch was created, but the Cyra release failed:\n{rel_err}\n"
                                 "Rebuild the release manually, or link it on the Cyra Releases page.")
                 log_error(f"Cyra release after patch {patch_name} failed: {rel_err}", include_stack=True)
+            else:
+                try:
+                    record_cyra_link(db, cyra_plan)
+                    release_note = (f"\nCyra {cyra_plan['release_version']} release built and committed "
+                                    f"(SVN r{result['revision']}), linked to patch {patch_name}.")
+                except Exception as link_err:
+                    release_note = (
+                        f"\n\nWARNING: Cyra {cyra_plan['release_version']} was built and committed "
+                        f"(SVN r{result['revision']}), but the hard link was not saved to "
+                        f"CYRA_RELEASE:\n{link_err}\n"
+                        "Set Requires patch on the Cyra Releases page (cyra-depends.json is already in the pack)."
+                    )
+                    log_error(f"Cyra link after patch {patch_name} failed: {link_err}", include_stack=True)
             success_details += release_note
         log_success("Patch Creation", success_details)
         messagebox.showinfo("Info", "Patch created successfully!" + release_note)

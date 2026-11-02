@@ -272,8 +272,8 @@ def switch_to_patch_menu(root_widget=None) -> None:
         buttons_frame = create_button_frame_patch(bottom_right_frame, files_listbox, locked_files_frame, patch_state)
         
         # Force initial layout update to ensure widgets are mapped
+        # Avoid full .update() which can orphan Windows keyboard focus before the busy dialog
         root_widget.update_idletasks()
-        root_widget.update()
 
         # Restore the files listbox items immediately
         if patch_state.get("listbox_items"):

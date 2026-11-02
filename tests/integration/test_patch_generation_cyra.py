@@ -105,6 +105,7 @@ def test_cyra_and_web_creates_patch_and_release(cyra_env, patch_env, mock_db, mo
     assert cyra_env["link"] == "S1.0.1085-W1S1"
     # cyra/ is committed + released, but never recorded in the Web/DB patch
     patch_id = next(pid for pid, p in mock_db.patches.items() if p["NAME"].startswith("S1.0.0101"))
+    assert "Requires Cyra: 1.2.0" in mock_db.patches[patch_id]["COMMENTS"]
     detail_names = [f["NAME"] for f in mock_db.patch_files[patch_id]]
     assert detail_names == ["a.asp", "seed.sql"]
     committed = patch_generation.commit_files.call_args[0][0]

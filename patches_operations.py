@@ -27,6 +27,7 @@ from cyra_release import (
     apply_version_bump as apply_cyra_version_bump,
     build_and_commit_release as build_and_commit_cyra_release,
     record_cyra_link,
+    ensure_requires_cyra_comment,
 )
 
 patch_info_dict = {}
@@ -248,6 +249,11 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
 
         wc_root = get_wc_root(svn_path)
 
+        if cyra_plan is not None:
+            patch_description = ensure_requires_cyra_comment(
+                patch_description, cyra_plan["release_version"]
+            )
+
         db.conn.begin()
         parsed_version = parse_version(patch_version_entry)
         if parsed_version:
@@ -334,19 +340,29 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
         
         release_note = ""
         if cyra_plan is not None:
-            # Patch update is committed at this point; a release failure must
-            # not roll it back. The link can be fixed on the Cyra Releases page.
+            # Patch update is committed at this point; a release/link failure
+            # must not roll it back. The link can be fixed on Cyra Releases.
+            verb = "rebuilt" if cyra_plan.get("rebuild") else "built"
             try:
                 result = build_and_commit_cyra_release(
                     wc_root, cyra_plan, username, patch_description, status_callback=status)
-                record_cyra_link(db, cyra_plan)
-                verb = "rebuilt" if cyra_plan.get("rebuild") else "built"
-                release_note = (f"\nCyra {cyra_plan['release_version']} release {verb} and committed "
-                                f"(SVN r{result['revision']}), linked to patch {patch_name}.")
             except Exception as rel_err:
                 release_note = (f"\n\nWARNING: the patch was updated, but the Cyra release failed:\n{rel_err}\n"
                                 "Rebuild the release manually, or link it on the Cyra Releases page.")
                 log_error(f"Cyra release after patch update {patch_name} failed: {rel_err}", include_stack=True)
+            else:
+                try:
+                    record_cyra_link(db, cyra_plan)
+                    release_note = (f"\nCyra {cyra_plan['release_version']} release {verb} and committed "
+                                    f"(SVN r{result['revision']}), linked to patch {patch_name}.")
+                except Exception as link_err:
+                    release_note = (
+                        f"\n\nWARNING: Cyra {cyra_plan['release_version']} was {verb} and committed "
+                        f"(SVN r{result['revision']}), but the hard link was not saved to "
+                        f"CYRA_RELEASE:\n{link_err}\n"
+                        "Set Requires patch on the Cyra Releases page (cyra-depends.json is already in the pack)."
+                    )
+                    log_error(f"Cyra link after patch update {patch_name} failed: {link_err}", include_stack=True)
 
         success_details = f"Patch: {patch_name}\nFiles: {len(selected_files)}\nDescription: {patch_description}"
         log_success("Patch Update", success_details + release_note)

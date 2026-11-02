@@ -222,6 +222,14 @@ class BusySession:
             self.win.destroy()
         except tk.TclError:
             pass
+        # Restore Windows keyboard activation after modal grab ends
+        try:
+            top = self.parent.winfo_toplevel()
+            top.lift()
+            top.focus_force()
+            top.after_idle(top.focus_force)
+        except tk.TclError:
+            pass
 
     def request_close(self):
         self._queue.put(("close",))

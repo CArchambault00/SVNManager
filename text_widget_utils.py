@@ -21,10 +21,10 @@ def ensure_text_widget_visible(text_widget: tk.Text, content: str = None) -> Non
         # Insert the new content
         text_widget.insert("1.0", content)
         
-        # Force the widget to update and render
-        text_widget.update()
+        # Layout only — avoid full .update() which can orphan Windows keyboard focus
+        text_widget.update_idletasks()
         
-        # Make sure the widget is visible and has focus
+        # Scroll so the start of the content is visible
         text_widget.see("1.0")
         
         # Force the parent to update layout
@@ -36,8 +36,8 @@ def ensure_text_widget_visible(text_widget: tk.Text, content: str = None) -> Non
             except:
                 break
     
-    # Final update to ensure visibility
-    text_widget.update()
+    # Final layout pass to ensure visibility
+    text_widget.update_idletasks()
 
 def get_text_content(text_widget: tk.Text) -> str:
     """

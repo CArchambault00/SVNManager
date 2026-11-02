@@ -71,3 +71,29 @@ def test_messagebox_hook_marshals_to_main(tk_root, monkeypatch):
     stub_info.assert_called_once()
     assert worker_id and worker_id[0] != threading.main_thread().ident
     assert call_threads and call_threads[0] == threading.main_thread().ident
+
+
+def test_close_restores_parent_focus(tk_root, monkeypatch):
+    """After grab_release/destroy, restore keyboard activation on the parent toplevel."""
+    monkeypatch.setattr(bd.BusySession, "_center_on_parent", lambda self: None)
+
+    lift_mock = MagicMock(wraps=tk_root.lift)
+    focus_mock = MagicMock(wraps=tk_root.focus_force)
+    after_idle_mock = MagicMock(wraps=tk_root.after_idle)
+    monkeypatch.setattr(tk_root, "lift", lift_mock)
+    monkeypatch.setattr(tk_root, "focus_force", focus_mock)
+    monkeypatch.setattr(tk_root, "after_idle", after_idle_mock)
+
+    done = threading.Event()
+
+    def work(set_status):
+        done.set()
+
+    bd.run_with_busy_dialog(tk_root, "Test", work)
+    assert done.wait(timeout=3)
+    bd.wait_until_idle(tk_root)
+
+    lift_mock.assert_called()
+    focus_mock.assert_called()
+    after_idle_mock.assert_called()
+    assert any(args and args[0] is focus_mock for args, _kwargs in after_idle_mock.call_args_list)

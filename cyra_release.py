@@ -506,10 +506,47 @@ def build_and_commit_release(wc_root, plan, username, description="", status_cal
     return {"version": version, "revision": m.group(1) if m else ""}
 
 
+def ensure_requires_cyra_comment(description, release_version):
+    """Append the standard 'Requires Cyra: x.y.z' line used by CyraReleases.asp.
+
+    GetReleaseDetail / ShowReleaseDetail search PATCH_HEADER.COMMENTS for this
+    exact prefix, so keep that wording (not a free-form sentence).
+    """
+    version = str(release_version or "").strip()
+    if not version:
+        return (description or "").rstrip()
+    line = f"Requires Cyra: {version}"
+    desc = (description or "").rstrip()
+    # Already present (any casing / surrounding whitespace)
+    if re.search(rf"(?im)^Requires Cyra:\s*{re.escape(version)}\s*$", desc):
+        return desc
+    if not desc:
+        return line
+    return f"{desc}\n\n{line}"
+
+
 def record_cyra_link(db, plan):
-    """Write the link into DEV_TOOL.CYRA_RELEASE and commit."""
+    """Write the link into DEV_TOOL.CYRA_RELEASE and commit.
+
+    Retries once after reconnect: Cyra builds can outlast an idle Oracle
+    session, which previously left cyra-depends.json committed while
+    REQUIRES_PATCH stayed null on CyraReleases.asp.
+    """
     svn_path = f"svn://10.31.10.249/{RELEASES_REL}/{plan['release_version']}"
-    db.set_cyra_release_link(
-        plan["release_version"], plan["link_patch"], plan["link_patch_name"], svn_path
-    )
-    db.conn.commit()
+    version = plan["release_version"]
+    patch_number = plan["link_patch"]
+    patch_name = plan["link_patch_name"]
+
+    def _write():
+        db.set_cyra_release_link(version, patch_number, patch_name, svn_path)
+        db.conn.commit()
+
+    try:
+        _write()
+    except Exception:
+        try:
+            db.close()
+        except Exception:
+            pass
+        db.connect()
+        _write()

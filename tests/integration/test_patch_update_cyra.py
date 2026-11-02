@@ -62,11 +62,16 @@ def seeded_patch(tmp_appdata, sample_config, mock_db, mock_svn, mock_messagebox)
 def update_env(seeded_patch, sample_config, mock_db, mock_messagebox, monkeypatch):
     mock_db.delete_patch_detail = MagicMock(
         side_effect=lambda pid: mock_db.patch_files.__setitem__(pid, []))
-    mock_db.update_patch_header = MagicMock()
+
+    def _update_header(patch_id, prefix, version, description, *rest):
+        mock_db.patches[patch_id]["COMMENTS"] = description
+        mock_db.patches[patch_id]["NAME"] = f"{prefix}{version}"
+
+    mock_db.update_patch_header = MagicMock(side_effect=_update_header)
     calls = {}
     monkeypatch.setattr(po, "commit_files", MagicMock())
     monkeypatch.setattr(po, "get_file_head_revision_batch",
-                        MagicMock(return_value={"cyra/core/a.py": "99"}))
+                        MagicMock(return_value={"cyra/core/a.py": "99", "webpage/pages/a.asp": "10"}))
     monkeypatch.setattr(po, "get_md5_checksum_batch", MagicMock(return_value={}))
     monkeypatch.setattr(po, "get_wc_root", MagicMock(return_value="C:/wc"))
     monkeypatch.setattr(po, "create_patch_files_batch", MagicMock())
@@ -83,10 +88,15 @@ def update_env(seeded_patch, sample_config, mock_db, mock_messagebox, monkeypatc
 
     def _build(wc_root, plan, username, description, status_callback=None):
         calls["build"] = plan["release_version"]
+        calls["build_description"] = description
         return {"version": plan["release_version"], "revision": "777"}
 
+    def _record(db, plan):
+        calls["link"] = plan["release_version"]
+        calls["link_patch"] = plan["link_patch_name"]
+
     monkeypatch.setattr(po, "build_and_commit_cyra_release", _build)
-    monkeypatch.setattr(po, "record_cyra_link", lambda db, plan: calls.__setitem__("link", plan["release_version"]))
+    monkeypatch.setattr(po, "record_cyra_link", _record)
     return calls
 
 
@@ -102,9 +112,47 @@ def test_update_patch_with_cyra_files_rebuilds_release(update_env, seeded_patch,
     )
     assert update_env["build"] == "1.1.0"
     assert update_env["link"] == "1.1.0"
+    assert update_env["link_patch"] == "S1.0.0200-W0"
+    # Modify Patch must append Requires Cyra to COMMENTS + ReadMe + release build
+    comments = mock_db.patches[seeded_patch["PATCH_ID"]]["COMMENTS"]
+    assert comments.startswith("updated")
+    assert "Requires Cyra: 1.1.0" in comments
+    readme_desc = po.create_readme_file.call_args[0][4]
+    assert "Requires Cyra: 1.1.0" in readme_desc
+    assert "Requires Cyra: 1.1.0" in update_env["build_description"]
     detail_names = [f["NAME"] for f in mock_db.patch_files[seeded_patch["PATCH_ID"]]]
     assert detail_names == ["a.asp"]
     committed = po.commit_files.call_args[0][0]
     assert "cyra/core/a.py" in committed
     copied = po.create_patch_files_batch.call_args[0][0]
     assert copied == ["webpage/pages/a.asp"]
+
+
+def test_update_patch_creates_release_and_appends_requires_cyra(
+    update_env, seeded_patch, mock_db, monkeypatch
+):
+    """Modify Patch with Cyra files but no prior link: create release + hard link + comment."""
+    monkeypatch.setattr(po, "build_cyra_update_plan", MagicMock(return_value={
+        "release_version": "1.2.0",
+        "link_patch": 100200,
+        "link_patch_name": "S1.0.0200-W0",
+        "link_source": "new patch S1.0.0200-W0",
+        "rebuild": False,
+    }))
+    monkeypatch.setattr(po, "apply_cyra_version_bump", MagicMock(return_value=[]))
+
+    po.update_patch(
+        selected_files=["cyra/core/a.py", "webpage/pages/a.asp"],
+        patch_id=seeded_patch["PATCH_ID"],
+        patch_version_prefixe="S",
+        patch_version_entry="1.0.0200-W0",
+        patch_description="new cyra pairing",
+        switch_to_modify_patch_menu=MagicMock(),
+        unlock_files=False,
+    )
+    assert update_env["build"] == "1.2.0"
+    assert update_env["link"] == "1.2.0"
+    assert update_env["link_patch"] == "S1.0.0200-W0"
+    comments = mock_db.patches[seeded_patch["PATCH_ID"]]["COMMENTS"]
+    assert "Requires Cyra: 1.2.0" in comments
+    assert "Requires Cyra: 1.2.0" in po.create_readme_file.call_args[0][4]

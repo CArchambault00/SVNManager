@@ -103,9 +103,9 @@ def create_button_frame_patch(parent, files_listbox, locked_files_frame, patch_s
     if patch_state and patch_state.get("patch_description"):
         ensure_text_widget_visible(patch_description_entry, patch_state["patch_description"])
         
-    # Force another update to ensure visibility
-    patch_description_entry.update()
-    right_panel.update()
+    # Layout only — avoid full .update() which can orphan Windows keyboard focus
+    patch_description_entry.update_idletasks()
+    right_panel.update_idletasks()
 
     # Unlock files checkbox
     unlock_files = tk.BooleanVar(value=(patch_state.get("unlock_files", False) if patch_state else False))
@@ -248,9 +248,9 @@ def create_button_frame_modify_patch(parent, files_listbox, patch_details, switc
     if patch_details.get('COMMENTS'):
         ensure_text_widget_visible(patch_description_entry, patch_details['COMMENTS'])
         
-    # Force another update to ensure visibility
-    patch_description_entry.update()
-    right_panel.update()
+    # Layout only — avoid full .update() which can orphan Windows keyboard focus
+    patch_description_entry.update_idletasks()
+    right_panel.update_idletasks()
 
     # Unlock files checkbox
     unlock_files = tk.BooleanVar(value=False)

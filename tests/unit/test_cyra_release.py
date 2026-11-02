@@ -7,6 +7,7 @@ import pytest
 
 from cyra_release import (
     classify_files,
+    ensure_requires_cyra_comment,
     files_for_patch_package,
     gate_file_json,
     missing_release_files,
@@ -173,6 +174,15 @@ def test_gate_file_json_is_stable():
     assert data["requiresPatchVersion"] == "1.0.1085"
     assert data["requiresPatchName"] == "S1.0.1085-W1S1"
     assert gate_file_json("1.2.0", 1085, "S1.0.1085-W1S1") == gate_file_json("1.2.0", 1085, "S1.0.1085-W1S1")
+
+
+def test_ensure_requires_cyra_comment_appends_once():
+    assert ensure_requires_cyra_comment("", "1.2.0") == "Requires Cyra: 1.2.0"
+    assert ensure_requires_cyra_comment("Fix login", "1.2.0") == "Fix login\n\nRequires Cyra: 1.2.0"
+    already = "Fix login\n\nRequires Cyra: 1.2.0"
+    assert ensure_requires_cyra_comment(already, "1.2.0") == already
+    # Different version still appends
+    assert "Requires Cyra: 1.3.0" in ensure_requires_cyra_comment(already, "1.3.0")
 
 
 def test_patch_key_s_major_rollover():
