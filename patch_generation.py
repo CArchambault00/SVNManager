@@ -5,7 +5,16 @@ import time
 import datetime as date
 import version_operation as vo
 from db_handler import dbClass
-from patch_utils import get_md5_checksum_batch, cleanup_files, create_depend_txt, create_readme_file, setup_patch_folder, create_main_sql_file, create_patch_files_batch
+from patch_utils import (
+    get_md5_checksum_batch,
+    cleanup_files,
+    create_depend_txt,
+    create_readme_file,
+    setup_patch_folder,
+    create_main_sql_file,
+    create_patch_files_batch,
+    split_wc_rel_dir_and_name,
+)
 from config import load_config, verify_config, log_error, log_success, log_action
 from cyra_release import (
     classify_files as classify_cyra_files,
@@ -174,8 +183,7 @@ def generate_patch(selected_files, patch_prefixe, patch_version, patch_descripti
                 if is_cyra_path(file):
                     continue
                 fake_path = '$/Projects/SVN/' + file
-                filename = os.path.basename(file)
-                clean_path = file.replace(filename, "")
+                clean_path, filename = split_wc_rel_dir_and_name(file)
 
                 parts = file.replace("\\", "/").split("/")
                 if file.startswith('Projects/'):

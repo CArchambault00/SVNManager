@@ -44,18 +44,17 @@ def test_commit_files(tmp_appdata, sample_config, mock_svn, mock_messagebox):
     svn.commit_files(["webpage/a.asp"], unlock_files=False)
 
 
-def test_build_tortoise_diff_argv_no_embedded_quotes():
-    argv = svn.build_tortoise_diff_argv(
+def test_build_tortoise_diff_cmdline_quotes_path_value():
+    """Tortoise requires /path:"..." around the path, not the whole switch."""
+    cmdline = svn.build_tortoise_diff_cmdline(
         r"C:\Program Files\TortoiseSVN\bin\TortoiseProc.exe",
         r"D:\my repo\webpage\a.asp",
     )
-    assert argv[0].endswith("TortoiseProc.exe")
-    assert argv[1] == "/command:diff"
-    assert argv[2] == r'/path:D:\my repo\webpage\a.asp'
-    assert '"' not in argv[2]
-    # Windows CreateProcess quoting still wraps the whole arg when needed
-    encoded = svn.subprocess.list2cmdline(argv)
-    assert '"/path:D:\\my repo\\webpage\\a.asp"' in encoded or "/path:D:\\my repo\\webpage\\a.asp" in encoded
+    assert cmdline.startswith('"C:\\Program Files\\TortoiseSVN\\bin\\TortoiseProc.exe"')
+    assert '/command:diff' in cmdline
+    assert '/path:"D:\\my repo\\webpage\\a.asp"' in cmdline
+    # Must NOT be the broken list2cmdline form that quotes the whole /path: token
+    assert '"/path:D:\\my repo\\webpage\\a.asp"' not in cmdline
 
 
 def test_find_tortoise_proc_program_files(tmp_path, monkeypatch, tmp_appdata):
@@ -88,11 +87,59 @@ def test_launch_tortoise_diff_success(monkeypatch, tmp_appdata):
     popen = MagicMock(return_value=proc)
     monkeypatch.setattr(svn.subprocess, "Popen", popen)
     assert svn.launch_tortoise_diff(r"D:\wc\file with spaces.asp") is True
-    args = popen.call_args[0][0]
-    assert args[1] == "/command:diff"
-    assert args[2].startswith("/path:")
-    assert '"' not in args[2]
-    assert "file with spaces.asp" in args[2]
+    cmdline = popen.call_args[0][0]
+    assert isinstance(cmdline, str)
+    assert popen.call_args.kwargs.get("shell") is False
+    assert '/command:diff' in cmdline
+    assert '/path:"D:\\wc\\file with spaces.asp"' in cmdline
+    assert '"/path:D:\\wc\\file with spaces.asp"' not in cmdline
+
+
+def test_unlock_uses_targets_file_for_spaced_paths(
+    tmp_appdata, sample_config, mock_messagebox, monkeypatch
+):
+    calls = []
+
+    def tracking_run(args, *a, **kwargs):
+        calls.append(list(args))
+        result = MagicMock()
+        result.returncode = 0
+        result.stderr = ""
+        result.stdout = "C:/svn/wc\n" if "--show-item" in args else "OK\n"
+        return result
+
+    monkeypatch.setattr(svn.subprocess, "run", tracking_run)
+    monkeypatch.setattr(svn, "update_listbox_file_info", MagicMock())
+    spaced = "webpage/Blown Film/Bag Type/BagTypeLookup.asp"
+    svn.unlock_files([spaced], MagicMock())
+
+    unlock_calls = [c for c in calls if len(c) > 1 and c[1] == "unlock"]
+    assert unlock_calls
+    assert "--targets" in unlock_calls[0]
+    assert spaced not in unlock_calls[0]  # path goes in the targets file, not argv
+
+
+def test_commit_uses_targets_file_for_spaced_paths(
+    tmp_appdata, sample_config, mock_messagebox, monkeypatch
+):
+    calls = []
+
+    def tracking_run(args, *a, **kwargs):
+        calls.append(list(args))
+        result = MagicMock()
+        result.returncode = 0
+        result.stderr = ""
+        result.stdout = "C:/svn/wc\n" if "--show-item" in args else "OK\n"
+        return result
+
+    monkeypatch.setattr(svn.subprocess, "run", tracking_run)
+    spaced = "webpage/Blown Film/a.asp"
+    svn.commit_files([spaced], unlock_files=True)
+
+    commit_calls = [c for c in calls if len(c) > 1 and c[1] == "commit"]
+    assert commit_calls
+    assert "--targets" in commit_calls[0]
+    assert "--no-unlock" not in commit_calls[0]
 
 
 def test_launch_tortoise_diff_missing(monkeypatch, tmp_appdata):

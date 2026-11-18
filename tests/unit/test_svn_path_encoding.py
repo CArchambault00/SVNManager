@@ -61,3 +61,60 @@ def test_run_svn_allows_stdout_devnull(monkeypatch):
     svn.run_svn(["svn", "export", "a", "b"], check=True, stdout=svn.subprocess.DEVNULL)
     assert "capture_output" not in captured
     assert captured.get("stdout") is svn.subprocess.DEVNULL
+
+
+def test_run_svn_with_path_args_passes_plain_paths(monkeypatch):
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = list(args)
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(svn.subprocess, "run", fake_run)
+    svn.run_svn_with_path_args(["svn", "unlock"], ["webpage/a.asp", "webpage/b.asp"])
+    assert captured["args"] == ["svn", "unlock", "--", "webpage/a.asp", "webpage/b.asp"]
+
+
+def test_run_svn_with_path_args_uses_targets_for_spaces(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = list(args)
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(svn.subprocess, "run", fake_run)
+    spaced = "webpage/Blown Film/Bag Type/a.asp"
+    svn.run_svn_with_path_args(["svn", "unlock"], [spaced])
+    assert captured["args"][:2] == ["svn", "unlock"]
+    assert "--targets" in captured["args"]
+    assert spaced not in captured["args"]
+    assert captured["args"][captured["args"].index("--targets") + 1].endswith(".txt")
+
+
+def test_run_svn_with_path_args_escapes_at_sign(monkeypatch):
+    captured = {}
+    written = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = list(args)
+        idx = args.index("--targets")
+        with open(args[idx + 1], encoding="utf-8") as fh:
+            written["body"] = fh.read()
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(svn.subprocess, "run", fake_run)
+    svn.run_svn_with_path_args(["svn", "info", "--xml"], ["webpage/foo@bar.asp"])
+    assert "--targets" in captured["args"]
+    assert written["body"].strip() == "webpage/foo@bar.asp@"
+
+
+def test_svn_escape_path_and_scope_helpers():
+    assert svn._svn_escape_path(r"webpage\a.asp") == "webpage/a.asp"
+    assert svn._svn_escape_path("webpage/foo@bar.asp") == "webpage/foo@bar.asp@"
+    assert svn._svn_escape_path("webpage/foo@bar.asp@") == "webpage/foo@bar.asp@"
+    assert svn.path_in_svn_scope("webpage/a.asp", "webpage") is True
+    assert svn.path_in_svn_scope("webpage_old/a.asp", "webpage") is False
+    assert svn.path_in_svn_scope("mywebpage/a.asp", "webpage") is False
+    assert svn.path_in_svn_scope("Projects/x.asp", "") is False
+    assert svn.path_in_svn_scope("webpage/x.asp", "") is True
+    assert svn._paths_need_targets_file(["webpage/-odd.asp"]) is True

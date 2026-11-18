@@ -7,7 +7,7 @@ from patch_utils import (
     get_md5_checksum_batch, cleanup_files, create_depend_txt, create_readme_file,
     setup_patch_folder, create_main_sql_file, get_managed_dest_paths,
     backup_extra_patch_files, restore_extra_patch_files, backup_existing_main_sql,
-    create_patch_files_batch,
+    create_patch_files_batch, split_wc_rel_dir_and_name,
 )
 import tkinter as tk
 import time
@@ -278,8 +278,7 @@ def update_patch(selected_files, patch_id, patch_version_prefixe, patch_version_
                 if is_cyra_path(file):
                     continue
                 fake_path = '$/Projects/SVN/' + file
-                filename = os.path.basename(file)
-                clean_path = file.replace(filename, "")
+                clean_path, filename = split_wc_rel_dir_and_name(file)
 
                 parts = file.replace("\\", "/").split("/")
                 if file.startswith('Projects/'):

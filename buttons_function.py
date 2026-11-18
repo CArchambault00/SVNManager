@@ -320,20 +320,21 @@ def open_file_location(files_listbox):
         return
     
     try:
-        # Alternative approach: Use subprocess.Popen with proper argument handling
         import sys
-        
+
         # Normalize the path for Windows
         normalized_path = os.path.normpath(full_file_path)
-        
-        # Use subprocess.Popen with list arguments to avoid shell parsing issues
-        subprocess.Popen([
-            'explorer.exe', 
-            '/select,', 
-            normalized_path
-        ], creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0)
+
+        # explorer requires /select,"C:\path with spaces\file" as one token.
+        # A list argv of ['/select,', path] breaks when the path has spaces.
+        cmdline = f'explorer /select,"{normalized_path}"'
+        subprocess.Popen(
+            cmdline,
+            shell=False,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+        )
         log_action("Open file location launched", path=normalized_path)
-        
+
     except Exception as e:
         try:
             # Fallback: Just open the directory containing the file

@@ -175,6 +175,41 @@ def test_open_file_location(files_tree, tmp_appdata, sample_config, tmp_path, mo
 
     bf.open_file_location(tree)
     popen.assert_called()
+    cmdline = popen.call_args[0][0]
+    assert isinstance(cmdline, str)
+    assert cmdline.startswith("explorer /select,")
+    assert "webpage" in cmdline and "a.asp" in cmdline
+
+
+def test_open_file_location_quotes_spaced_path(
+    tk_root, tmp_appdata, sample_config, tmp_path, mock_messagebox, monkeypatch
+):
+    import buttons_function as bf
+    from tkinter import ttk
+
+    tree = ttk.Treeview(tk_root, columns=("Status", "Version", "File", "Lock Date"), show="headings")
+    spaced_rel = "webpage/Blown Film/Bag Type/BagTypeLookup.asp"
+    item = tree.insert("", "end", values=("locked", "1", spaced_rel, ""))
+    tree.selection_set(item)
+
+    wc = tmp_path / "wc"
+    target = wc / "webpage" / "Blown Film" / "Bag Type"
+    target.mkdir(parents=True)
+    (target / "BagTypeLookup.asp").write_text("x", encoding="utf-8")
+
+    def run(args, *a, **kwargs):
+        return MagicMock(returncode=0, stderr="", stdout=str(wc).replace("\\", "/") + "\n")
+
+    monkeypatch.setattr(bf.subprocess, "run", run)
+    monkeypatch.setattr("svn_operations.subprocess.run", run)
+    popen = MagicMock()
+    monkeypatch.setattr(bf.subprocess, "Popen", popen)
+
+    bf.open_file_location(tree)
+    cmdline = popen.call_args[0][0]
+    assert 'explorer /select,"' in cmdline
+    assert "Blown Film" in cmdline
+    assert cmdline.endswith('"')
 
 
 def test_handle_drop_adds_files(tk_root, tmp_appdata, sample_config, tmp_path, mock_messagebox, monkeypatch):

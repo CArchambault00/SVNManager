@@ -63,6 +63,14 @@ def test_parse_user_locks_with_scope_relative():
     assert paths == ["webpage/a.asp"]
 
 
+def test_parse_user_locks_scope_ignores_partial_prefix_match():
+    xml = LOCKED_STATUS_XML.replace(
+        'path="webpage/a.asp"', 'path="webpage_old/a.asp"', 1
+    )
+    locked = svn._parse_user_locks_from_status_xml(xml, "tester", "webpage")
+    assert locked == []
+
+
 def test_get_file_info_batch_multi_path(tmp_appdata, sample_config, monkeypatch):
     calls = []
 
@@ -88,7 +96,7 @@ def test_get_file_info_batch_multi_path(tmp_appdata, sample_config, monkeypatch)
 
     results = svn.get_file_info_batch(["webpage/a.asp", "webpage/b.asp"])
 
-    info_calls = [c for c in calls if c[:3] == ["svn", "info", "--xml"]]
+    info_calls = [c for c in calls if len(c) >= 3 and c[0] == "svn" and c[1] == "info" and "--xml" in c]
     assert len(info_calls) == 1
     assert "webpage/a.asp" in info_calls[0]
     assert "webpage/b.asp" in info_calls[0]

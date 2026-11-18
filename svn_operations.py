@@ -1,6 +1,7 @@
 # svn_operations.py
 import subprocess
 import shutil
+import tempfile
 from tkinter import messagebox
 from config import load_config, verify_config, log_error, log_success, log_action, log_command
 import xml.etree.ElementTree as ET
@@ -42,6 +43,76 @@ def run_svn(args, **kwargs):
             stderr=stderr,
         )
     return result
+
+
+def _svn_escape_path(path):
+    """
+    Normalize a WC path for svn CLI operands.
+
+    SVN treats '@' as peg-revision syntax, so paths that contain '@' must end
+    with an extra '@'. Paths are always forward-slash normalized.
+    """
+    normalized = (path or "").replace("\\", "/")
+    if "@" in normalized and not normalized.endswith("@"):
+        normalized += "@"
+    return normalized
+
+
+def _paths_need_targets_file(paths):
+    """True when paths need a --targets file (whitespace, '@', or leading '-')."""
+    for path in paths:
+        if any(ch.isspace() for ch in path):
+            return True
+        if "@" in path:
+            return True
+        for segment in path.replace("\\", "/").split("/"):
+            if segment.startswith("-"):
+                return True
+    return False
+
+
+def path_in_svn_scope(path, scope_relative):
+    """
+    True if WC-relative path is inside scope_relative.
+
+    Uses path-segment boundaries (not substring search), so scope 'webpage'
+    does not match 'webpage_old/...' or 'mywebpage/...'.
+    """
+    path_n = (path or "").replace("\\", "/")
+    scope = (scope_relative or "").replace("\\", "/").rstrip("/")
+    if not scope:
+        return not path_n.startswith("Projects")
+    return path_n == scope or path_n.startswith(scope + "/")
+
+
+def run_svn_with_path_args(base_args, paths, **kwargs):
+    """
+    Run svn with path operands.
+
+    Escapes '@' peg syntax and, when paths contain whitespace/'@'/leading '-',
+    passes them via a temporary --targets file. Otherwise adds '--' before
+    operands so names starting with '-' are never parsed as svn options.
+    """
+    normalized = [_svn_escape_path(p) for p in paths]
+    targets_path = None
+    try:
+        if normalized and _paths_need_targets_file(paths):
+            fd, targets_path = tempfile.mkstemp(prefix="svn_mgr_targets_", suffix=".txt")
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+                for path in normalized:
+                    fh.write(path + "\n")
+            args = list(base_args) + ["--targets", targets_path]
+        elif normalized:
+            args = list(base_args) + ["--"] + normalized
+        else:
+            args = list(base_args)
+        return run_svn(args, **kwargs)
+    finally:
+        if targets_path:
+            try:
+                os.unlink(targets_path)
+            except OSError:
+                pass
 
 
 def _registry_tortoise_directory():
@@ -103,13 +174,22 @@ def find_tortoise_proc():
     return None
 
 
-def build_tortoise_diff_argv(tortoise_exe, full_path):
-    """Build TortoiseProc argv for /command:diff.
+def build_tortoise_diff_cmdline(tortoise_exe, full_path):
+    """Build a TortoiseProc command line for /command:diff.
 
-    Do not embed quotes in /path: — with shell=False, Windows list2cmdline
-    already quotes the whole argument when the path has spaces. Embedded
-    quotes become literal \\\" and Tortoise fails silently.
+    TortoiseProc parses /path: itself and requires quotes around the path
+    value when it contains spaces: /path:"D:\\dir with space\\file.asp".
+
+    Passing a Python argv list through CreateProcess/list2cmdline quotes the
+    whole /path:... token instead ("/path:D:\\dir with space\\file"), which
+    Tortoise treats as an unquoted path and truncates at the first space.
     """
+    normalized = os.path.normpath(full_path).replace('"', "")
+    return f'"{tortoise_exe}" /command:diff /path:"{normalized}"'
+
+
+def build_tortoise_diff_argv(tortoise_exe, full_path):
+    """Deprecated: prefer build_tortoise_diff_cmdline for spaced paths."""
     normalized = os.path.normpath(full_path)
     return [
         tortoise_exe,
@@ -128,10 +208,12 @@ def launch_tortoise_diff(full_path):
         log_action("View Diff Tortoise unavailable", details="TortoiseProc.exe not found")
         return False
 
-    argv = build_tortoise_diff_argv(tortoise_exe, full_path)
-    log_command("TortoiseProc", argv, outcome="launching")
+    cmdline = build_tortoise_diff_cmdline(tortoise_exe, full_path)
+    log_command("TortoiseProc", cmdline, outcome="launching")
     try:
-        proc = subprocess.Popen(argv, shell=False)
+        # String form on Windows: pass Tortoise's required /path:"..." quoting
+        # literally (list argv + list2cmdline breaks spaced paths — see above).
+        proc = subprocess.Popen(cmdline, shell=False)
     except (FileNotFoundError, OSError) as e:
         log_error(f"TortoiseSVN launch failed: {e}")
         log_action("View Diff Tortoise launch failed", details=str(e), path=full_path)
@@ -338,11 +420,7 @@ def _parse_user_locks_from_status_xml(status_xml, username, scope_relative_path)
             if lock is None:
                 continue
             owner = lock.findtext("owner")
-            in_scope = (
-                (relative_path and relative_path in path)
-                or (not relative_path and not path.startswith("Projects"))
-            )
-            if owner == username and in_scope:
+            if owner == username and path_in_svn_scope(path, relative_path):
                 lock_date = _format_lock_date(lock.findtext("created", ""))
                 locked_files.append((path.replace("\\", "/"), revision, lock_date))
                 break
@@ -386,13 +464,12 @@ def _lock_unlock_files(selected_files, patch_listbox, lock=True, batch_size=50):
             resolve_wc_relative_path(wc_root, f) for f in selected_files
         ]
 
-        # Process files in batches
+        # Process files in batches (--targets when paths contain spaces)
         for i in range(0, len(svn_targets), batch_size):
             batch = svn_targets[i:i + batch_size]
-            args = base_args + batch
-            
-            result = run_svn(
-                args,
+            result = run_svn_with_path_args(
+                base_args,
+                batch,
                 cwd=wc_root,
                 capture_output=True,
                 text=True,
@@ -503,8 +580,7 @@ def commit_files_batch(selected_files, unlock_files, batch_size=50):
 
         for i in range(0, len(resolved_files), batch_size):
             batch = resolved_files[i:i + batch_size]
-            args = base_args + batch
-            result = run_svn(args, cwd=wc_root)
+            result = run_svn_with_path_args(base_args, batch, cwd=wc_root)
             if result.returncode != 0:
                 raise Exception(result.stderr)
         
@@ -564,8 +640,7 @@ def get_file_info_batch(files, batch_size=50):
             continue
 
         try:
-            args = ["svn", "info", "--xml"] + valid_files
-            result = run_svn(args, cwd=wc_root)
+            result = run_svn_with_path_args(["svn", "info", "--xml"], valid_files, cwd=wc_root)
 
             if result.returncode == 0 and result.stdout:
                 root = ET.fromstring(result.stdout)
@@ -645,8 +720,7 @@ def get_file_revision_batch(files, batch_size=50):
             continue
 
         try:
-            args = ["svn", "info", "--xml"] + valid_files
-            result = run_svn(args, cwd=wc_root)
+            result = run_svn_with_path_args(["svn", "info", "--xml"], valid_files, cwd=wc_root)
             if result.returncode == 0 and result.stdout:
                 root = ET.fromstring(result.stdout)
                 for entry in root.findall(".//entry"):
@@ -711,9 +785,9 @@ def revert_files(selected_files, batch_size=50):
         for i in range(0, len(selected_files), batch_size):
             batch = selected_files[i:i + batch_size]
             try:
-                args = ["svn", "revert"] + batch
-                run_svn(
-                    args,
+                run_svn_with_path_args(
+                    ["svn", "revert"],
+                    batch,
                     capture_output=True,
                     text=True,
                     cwd=wc_root,

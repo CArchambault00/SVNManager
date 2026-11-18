@@ -34,6 +34,34 @@ GENERATED_PATCH_ROOT_FILES = frozenset({
 MAIN_SQL_FILENAME = "MainSQL.sql"
 MAIN_SQL_BACKUP_RE = re.compile(r"^MainSQL \((\d+)\)\.sql$", re.IGNORECASE)
 
+
+def split_wc_rel_dir_and_name(rel_path):
+    """
+    Split a WC-relative path into (clean_path_with_trailing_slash, filename).
+
+    Uses rsplit so a folder that shares the file's name is not corrupted
+    (unlike str.replace(filename, "")).
+    """
+    norm = (rel_path or "").replace("\\", "/")
+    if "/" in norm:
+        dirname, filename = norm.rsplit("/", 1)
+        return dirname + "/", filename
+    return "", norm
+
+
+def strip_path_prefix(path, prefix):
+    """Remove a path-segment prefix from path; no-op if not a true prefix."""
+    path_n = (path or "").replace("\\", "/")
+    prefix_n = (prefix or "").replace("\\", "/").rstrip("/")
+    if not prefix_n:
+        return path_n
+    if path_n == prefix_n:
+        return ""
+    if path_n.startswith(prefix_n + "/"):
+        return path_n[len(prefix_n) + 1 :]
+    return path_n
+
+
 def get_md5_checksum(file_path):
     """Returns the MD5 checksum of a given file."""
     md5_hash = hashlib.md5()
@@ -52,13 +80,14 @@ def map_svn_file_to_patch_dest(file_path, svn_path=None, scope_relative=None):
     if svn_path:
         if scope_relative is None:
             scope_relative = _svn_scope_relative(svn_path)
-        if scope_relative and file_path_no_svn.startswith(scope_relative):
-            file_path_no_svn = file_path_no_svn.replace(scope_relative, "", 1).lstrip("/")
+        file_path_no_svn = strip_path_prefix(file_path_no_svn, scope_relative)
 
-    if file_path_no_svn.startswith("webpage"):
-        return file_path_no_svn.replace("webpage", "Web", 1)
-    if file_path_no_svn.startswith("Database"):
-        return file_path_no_svn.replace("Database", "DB", 1).replace("StoredProcedures", "SP")
+    if file_path_no_svn == "webpage" or file_path_no_svn.startswith("webpage/"):
+        return "Web" + file_path_no_svn[len("webpage") :]
+    if file_path_no_svn == "Database" or file_path_no_svn.startswith("Database/"):
+        return ("DB" + file_path_no_svn[len("Database") :]).replace(
+            "StoredProcedures", "SP"
+        )
     return None
 
 def map_db_file_to_patch_dest(file_info):
@@ -321,20 +350,19 @@ def write_sql_commands(sql_file, file_path, schema):
 def create_patch_files(file, svn_path, patch_version_folder):
     """Create patch files in the appropriate locations."""
     try:
-        file_path_no_svn = file
-        if file_path_no_svn.startswith("webpage"):
-            dest_file = file_path_no_svn.replace("webpage", "Web")
+        file_path_no_svn = file.replace("\\", "/")
+        if file_path_no_svn == "webpage" or file_path_no_svn.startswith("webpage/"):
+            dest_file = "Web" + file_path_no_svn[len("webpage"):]
             dest_file = os.path.join(patch_version_folder, dest_file)
             os.makedirs(os.path.dirname(dest_file), exist_ok=True)
-            file_location = f"{svn_path}/{file_path_no_svn}"
-            shutil.copy2(file_location, dest_file)
-        elif file_path_no_svn.startswith("Database"):
-            sql_path = file_path_no_svn.replace("Database", "DB")
-            sql_path = sql_path.replace("StoredProcedures", "SP")
+            shutil.copy2(os.path.join(svn_path, file_path_no_svn.replace("/", os.sep)), dest_file)
+        elif file_path_no_svn == "Database" or file_path_no_svn.startswith("Database/"):
+            sql_path = ("DB" + file_path_no_svn[len("Database"):]).replace(
+                "StoredProcedures", "SP"
+            )
             dest_file = os.path.join(patch_version_folder, sql_path)
             os.makedirs(os.path.dirname(dest_file), exist_ok=True)
-            file_location = f"{svn_path}/{file_path_no_svn}"
-            shutil.copy2(file_location, dest_file)
+            shutil.copy2(os.path.join(svn_path, file_path_no_svn.replace("/", os.sep)), dest_file)
     except Exception as e:
         raise Exception(f"Error creating patch files for {file}: {e}")
 
@@ -359,12 +387,9 @@ def create_readme_file(patch_version_folder, patch_name, username, creation_date
                     database_files.append(f"{file['PATH']} ({file['VERSION']})")
             else:
                 revision = revisions.get(file, "")
-                filePathWithoutProjects = file
+                filePathWithoutProjects = strip_path_prefix(file, scope_relative)
 
-                if scope_relative and filePathWithoutProjects.startswith(scope_relative):
-                    filePathWithoutProjects = filePathWithoutProjects.replace(scope_relative, "", 1).lstrip("/")
-
-                if filePathWithoutProjects.startswith("webpage"):
+                if filePathWithoutProjects == "webpage" or filePathWithoutProjects.startswith("webpage/"):
                     webpage_files.append(f"{file} ({revision})")
                 else:
                     database_files.append(f"{file} ({revision})")
@@ -407,10 +432,7 @@ def create_main_sql_file(patch_version_folder, files, patch_name=None, version_i
                 filePathWithoutProjects = file["PATH"]
                 filePathWithoutProjects = filePathWithoutProjects.replace(file["SVN_PATH"], "")
             elif isinstance(file, str):
-                filePathWithoutProjects = file
-                if scope_relative and isinstance(filePathWithoutProjects, str) and filePathWithoutProjects.startswith(scope_relative):
-                    filePathWithoutProjects = filePathWithoutProjects.replace(scope_relative, "", 1).lstrip("/")
-            
+                filePathWithoutProjects = strip_path_prefix(file, scope_relative)
 
             if isinstance(file, dict) and file["FOLDER_TYPE"] == '2':
                 filePathWithoutProjects = "Database" + filePathWithoutProjects
@@ -562,21 +584,22 @@ def create_patch_files_batch(files, svn_path, patch_version_folder):
 
     # First, categorize files
     for file in files:
-        file_path_no_svn = file
-        if scope_relative and file_path_no_svn.startswith(scope_relative):
-            file_path_no_svn = file_path_no_svn.replace(scope_relative, "", 1).lstrip("/")
-        if file_path_no_svn.startswith("webpage"):
+        file_path_no_svn = strip_path_prefix(file, scope_relative)
+        if file_path_no_svn == "webpage" or file_path_no_svn.startswith("webpage/"):
+            dest = "Web" + file_path_no_svn[len("webpage"):]
             web_files.append((
                 file_path_no_svn,
-                file_path_no_svn.replace("webpage", "Web"),
-                f"{svn_path}/{file_path_no_svn}"
+                dest,
+                os.path.join(svn_path, file_path_no_svn.replace("/", os.sep)),
             ))
-        elif file_path_no_svn.startswith("Database"):
-            sql_path = file_path_no_svn.replace("Database", "DB").replace("StoredProcedures", "SP")
+        elif file_path_no_svn == "Database" or file_path_no_svn.startswith("Database/"):
+            sql_path = ("DB" + file_path_no_svn[len("Database"):]).replace(
+                "StoredProcedures", "SP"
+            )
             db_files.append((
                 file_path_no_svn,
                 sql_path,
-                f"{svn_path}/{file_path_no_svn}"
+                os.path.join(svn_path, file_path_no_svn.replace("/", os.sep)),
             ))
     # Create directories with error handling
     directories = set()

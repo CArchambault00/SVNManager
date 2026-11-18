@@ -19,6 +19,8 @@ from patch_utils import (
     map_db_file_to_patch_dest,
     map_svn_file_to_patch_dest,
     restore_extra_patch_files,
+    split_wc_rel_dir_and_name,
+    strip_path_prefix,
 )
 
 
@@ -43,12 +45,29 @@ def test_map_svn_file_to_patch_dest_unknown():
     assert map_svn_file_to_patch_dest("Other/file.txt") is None
 
 
+def test_map_svn_file_does_not_match_partial_webpage_prefix():
+    assert map_svn_file_to_patch_dest("webpage_old/foo.asp") is None
+
+
 def test_map_svn_file_strips_relative_prefix():
     with patch("patch_utils._svn_scope_relative", return_value="Projects/SVN"):
         dest = map_svn_file_to_patch_dest(
             "Projects/SVN/webpage/a.asp", svn_path="C:/svn/Projects/SVN"
         )
     assert dest == "Web/a.asp"
+
+
+def test_split_wc_rel_dir_and_name_handles_repeated_name():
+    clean, name = split_wc_rel_dir_and_name("webpage/Config/Config")
+    assert clean == "webpage/Config/"
+    assert name == "Config"
+    # Old str.replace(filename, "") corrupted this to "webpage//"
+    assert clean != "webpage//"
+
+
+def test_strip_path_prefix_uses_segment_boundary():
+    assert strip_path_prefix("webpage/a.asp", "webpage") == "a.asp"
+    assert strip_path_prefix("webpage_old/a.asp", "webpage") == "webpage_old/a.asp"
 
 
 def test_map_db_file_to_patch_dest_web():
